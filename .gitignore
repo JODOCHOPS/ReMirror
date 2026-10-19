@@ -1,0 +1,21 @@
+# Flutter and Dart generated files
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+dist/
+coverage/
+
+# Editor and local machine files
+.idea/
+.vscode/
+*.iml
+*.log
+
+# Never commit local signing credentials
+android/key.properties
+*.keystore
+*.jks
