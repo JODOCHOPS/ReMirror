@@ -1,6 +1,6 @@
 # ReMirror
 
-一个用回译法练习英语的 Windows / Android 应用。当前版本完成第一步：粘贴英文文章，选择翻译源，按段生成中文参考译文。
+一个用回译法练习英语的 Windows / Android 应用。粘贴英文文章并生成中文参考译文后，可逐句回译，最后对照英文原文检查文本差异。
 
 ## 已实现
 
@@ -8,8 +8,11 @@
 - 用户自行配置服务凭据；凭据通过设备安全存储保存。英文原文只发送给当前选择的翻译服务。
 - 长文按段、按服务请求长度拆分，译文维持原段落顺序；显示进度、取消和错误信息。
 - 自适应 Windows / Android 首屏、过渡动画、示例文章及译文复制。
+- 译文按句呈现；点击句子填写英文回译，整篇结束后逐句显示原文、作答和文本差异。未作答句子也可提交。
+- 生成参考译文后隐藏英文原文，直到回译结果页；中英文句数不一致时按各段顺序尽量对应，多出的句子单独列出。
+- 界面英文使用 Liberation Serif，中文使用阿里巴巴普惠体 3.0，字体随应用打包。
 
-目前还没有逆向写作和逐句对照界面。使用翻译服务前，需在对应平台开通 API 并填写自己的凭据。API 调用可能产生费用。
+文本差异只比较词语是否相同，不评价语义或语法。练习记录仅在当前页面保留，离开后不会保存。使用翻译服务前，需在对应平台开通 API 并填写自己的凭据。API 调用可能产生费用。
 
 ## 本地开发
 
@@ -45,3 +48,8 @@ Windows 安装程序通过 [Inno Setup](https://jrsoftware.org/isinfo.php) 编�
 | AI | HTTPS 基础地址、API Key、模型名 | Chat Completions 兼容接口 |
 
 AI 基础地址通常以 `/v1` 结尾；也可填写完整的 `/chat/completions` 地址。为保护密钥，当前版本只接受 HTTPS 地址。
+
+## 字体来源
+
+- 阿里巴巴普惠体 3.0：版权归阿里巴巴（中国）有限公司，见 [官方字体网站](https://www.alibabafonts.com/) 与仓库中的 `assets/fonts/LICENSE-AlibabaPuHuiTi-3.0.md`。项目使用 Regular 和 Bold 字重，与阿里巴巴不存在合作或背书关系。
+- Liberation Serif 2.1.5：来自 [Liberation Fonts](https://github.com/liberationfonts/liberation-fonts/releases)，使用 SIL Open Font License 1.1，见 `assets/fonts/liberation-fonts-ttf-2.1.5/LICENSE`。

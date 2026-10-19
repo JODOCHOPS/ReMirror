@@ -21,3 +21,19 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: LiberationSerif
+      fonts:
+        - asset: assets/fonts/liberation-fonts-ttf-2.1.5/LiberationSerif-Regular.ttf
+        - asset: assets/fonts/liberation-fonts-ttf-2.1.5/LiberationSerif-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/liberation-fonts-ttf-2.1.5/LiberationSerif-Italic.ttf
+          style: italic
+        - asset: assets/fonts/liberation-fonts-ttf-2.1.5/LiberationSerif-BoldItalic.ttf
+          weight: 700
+          style: italic
+    - family: AlibabaPuHuiTi
+      fonts:
+        - asset: assets/fonts/AlibabaPuHuiTi-3-55-Regular.ttf
+        - asset: assets/fonts/AlibabaPuHuiTi-3-85-Bold.ttf
+          weight: 700

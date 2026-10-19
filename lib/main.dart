@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'credential_store.dart';
+import 'back_translation_page.dart';
 import 'translation.dart';
 
 void main() {
@@ -24,6 +25,8 @@ class ReMirrorApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
+          fontFamily: 'LiberationSerif',
+          fontFamilyFallback: const ['AlibabaPuHuiTi'],
           scaffoldBackgroundColor: _background,
           colorScheme: ColorScheme.fromSeed(
             seedColor: _accent,
@@ -222,6 +225,15 @@ class _TranslationHomeState extends State<TranslationHome> {
     }
   }
 
+  void _openPractice() {
+    if (_result.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BackTranslationPage(paragraphs: List.of(_result)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         body: SafeArea(
@@ -334,8 +346,8 @@ class _TranslationHomeState extends State<TranslationHome> {
 
   Widget _steps(bool compact) {
     final items = [
-      ('01', '原文译解', true),
-      ('02', '逆向写作', false),
+      ('01', '原文译解', _result.isEmpty),
+      ('02', '逆向写作', _result.isNotEmpty),
       ('03', '逐句对照', false),
     ];
     return Wrap(
@@ -388,30 +400,58 @@ class _TranslationHomeState extends State<TranslationHome> {
           children: [
             _cardHeading(Icons.article_outlined, '英文原文', 'ORIGINAL TEXT'),
             const SizedBox(height: 20),
-            Container(
-              height: 355,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFAFCFB),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: _border),
-              ),
-              child: TextField(
-                controller: _original,
-                expands: true,
-                maxLines: null,
-                minLines: null,
-                textAlignVertical: TextAlignVertical.top,
-                style: const TextStyle(fontSize: 15, height: 1.65, color: _ink),
-                decoration: const InputDecoration(
-                  hintText: '在这里粘贴英文文章…\n\n段落会被保留下来，方便后续回译练习。',
-                  hintStyle: TextStyle(color: Color(0xFF9BAAAE)),
-                  contentPadding: EdgeInsets.all(20),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
+            if (_result.isNotEmpty)
+              Container(
+                height: 355,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAFCFB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _border),
+                ),
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.visibility_off_outlined,
+                          size: 42, color: Color(0xFF91B7B4)),
+                      SizedBox(height: 14),
+                      Text('原文已隐藏',
+                          style: TextStyle(
+                              color: _ink, fontWeight: FontWeight.w700)),
+                      SizedBox(height: 6),
+                      Text('完成回译后，在结果页查看原文',
+                          style: TextStyle(color: _muted, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Container(
+                height: 355,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAFCFB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _border),
+                ),
+                child: TextField(
+                  controller: _original,
+                  expands: true,
+                  maxLines: null,
+                  minLines: null,
+                  textAlignVertical: TextAlignVertical.top,
+                  style:
+                      const TextStyle(fontSize: 15, height: 1.65, color: _ink),
+                  decoration: const InputDecoration(
+                    hintText: '在这里粘贴英文文章…\n\n段落会被保留下来，方便后续回译练习。',
+                    hintStyle: TextStyle(color: Color(0xFF9BAAAE)),
+                    contentPadding: EdgeInsets.all(20),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                  ),
                 ),
               ),
-            ),
             const SizedBox(height: 14),
             Row(
               children: [
@@ -422,7 +462,7 @@ class _TranslationHomeState extends State<TranslationHome> {
                 ),
                 const Spacer(),
                 TextButton(
-                  onPressed: _busy
+                  onPressed: _busy || _result.isNotEmpty
                       ? null
                       : () => _original.text =
                           'Learning a language changes the way we notice the world. '
@@ -433,12 +473,13 @@ class _TranslationHomeState extends State<TranslationHome> {
                   child: const Text('填入示例'),
                 ),
                 TextButton(
-                  onPressed: _busy || _original.text.isEmpty
-                      ? null
-                      : () {
-                          _original.clear();
-                          setState(() => _result = const []);
-                        },
+                  onPressed:
+                      _busy || _result.isNotEmpty || _original.text.isEmpty
+                          ? null
+                          : () {
+                              _original.clear();
+                              setState(() => _result = const []);
+                            },
                   child: const Text('清空'),
                 ),
               ],
@@ -446,11 +487,18 @@ class _TranslationHomeState extends State<TranslationHome> {
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _busy ? _cancel : _translate,
-                icon: Icon(_busy ? Icons.close_rounded : Icons.auto_awesome),
-                label: Text(_busy ? '取消翻译' : '生成中文参考译文'),
-              ),
+              child: _result.isNotEmpty
+                  ? OutlinedButton.icon(
+                      onPressed: () => setState(() => _result = const []),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('重新编辑原文'),
+                    )
+                  : FilledButton.icon(
+                      onPressed: _busy ? _cancel : _translate,
+                      icon: Icon(
+                          _busy ? Icons.close_rounded : Icons.auto_awesome),
+                      label: Text(_busy ? '取消翻译' : '生成中文参考译文'),
+                    ),
             ),
           ],
         ),
@@ -531,6 +579,17 @@ class _TranslationHomeState extends State<TranslationHome> {
                 ),
               ],
             ),
+            if (_result.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _openPractice,
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: const Text('开始逐句回译'),
+                ),
+              ),
+            ],
           ],
         ),
       );
