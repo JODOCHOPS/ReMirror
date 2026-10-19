@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remirror/back_translation.dart';
 import 'package:remirror/back_translation_page.dart';
+import 'package:remirror/practice_workbook.dart';
 import 'package:remirror/translation.dart';
 
 void main() {
@@ -63,5 +64,37 @@ void main() {
     expect(find.text('你的回译'), findsWidgets);
     expect(find.text('未作答'), findsOneWidget);
     expect(find.textContaining('标色部分是文本差异'), findsOneWidget);
+  });
+
+  testWidgets('imported practice hides the previous answer until submission',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final firstRound = PracticeWorkbook.fromParagraphs(const [
+      PracticeSentence(
+        paragraphNumber: 1,
+        sentenceNumber: 1,
+        reference: '猫睡着了。',
+        original: 'The cat sleeps.',
+      ),
+    ]);
+    final imported = PracticeWorkbook.import(
+      firstRound.export({0: 'The dog sleeps.'}),
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: BackTranslationPage(
+        paragraphs: const [],
+        importedPractice: imported,
+      ),
+    ));
+
+    expect(find.text('The dog sleeps.'), findsNothing);
+    expect(find.text('The cat sleeps.'), findsNothing);
+    expect(find.text('导出本轮结果 XLSX'), findsNothing);
+    await tester.tap(find.text('结束并查看结果'));
+    await tester.pumpAndSettle();
+    expect(find.text('上轮回译'), findsOneWidget);
+    expect(find.text('The dog sleeps.'), findsOneWidget);
+    expect(find.text('导出本轮结果 XLSX'), findsOneWidget);
   });
 }

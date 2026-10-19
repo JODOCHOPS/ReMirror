@@ -1,6 +1,8 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import 'back_translation.dart';
+import 'practice_workbook.dart';
 import 'translation.dart';
 
 const _ink = Color(0xFF1A2832);
@@ -9,9 +11,14 @@ const _accent = Color(0xFF187A82);
 const _border = Color(0xFFDCE6E5);
 
 class BackTranslationPage extends StatefulWidget {
-  const BackTranslationPage({super.key, required this.paragraphs});
+  const BackTranslationPage({
+    super.key,
+    required this.paragraphs,
+    this.importedPractice,
+  });
 
   final List<TranslatedParagraph> paragraphs;
+  final PracticeWorkbook? importedPractice;
 
   @override
   State<BackTranslationPage> createState() => _BackTranslationPageState();
@@ -19,9 +26,13 @@ class BackTranslationPage extends StatefulWidget {
 
 class _BackTranslationPageState extends State<BackTranslationPage> {
   late final List<PracticeSentence> _sentences =
-      buildPracticeSentences(widget.paragraphs);
+      widget.importedPractice?.sentences ??
+          buildPracticeSentences(widget.paragraphs);
+  late final PracticeWorkbook _workbook =
+      widget.importedPractice ?? PracticeWorkbook.fromParagraphs(_sentences);
   final Map<int, String> _answers = {};
   bool _submitted = false;
+  bool _exporting = false;
 
   int get _exerciseCount =>
       _sentences.where((sentence) => sentence.canAnswer).length;
@@ -92,6 +103,34 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
         _submitted = false;
       });
 
+  Future<void> _export() async {
+    if (!_submitted || _exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final bytes = _workbook.export(_answers);
+      final saved = await FilePicker.saveFile(
+        fileName: 'ReMirror-${_workbook.nextRoundSheetName}.xlsx',
+        bytes: bytes,
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        dialogTitle: '导出本轮练习结果',
+      );
+      if (mounted && saved != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('练习结果已导出')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出失败：$error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < 760;
@@ -154,13 +193,19 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                     const SizedBox(height: 12),
                   ],
                 const SizedBox(height: 12),
-                if (_submitted)
+                if (_submitted) ...[
+                  FilledButton.icon(
+                    onPressed: _exporting ? null : _export,
+                    icon: const Icon(Icons.file_download_outlined),
+                    label: Text(_exporting ? '正在导出…' : '导出本轮结果 XLSX'),
+                  ),
+                  const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: _restart,
                     icon: const Icon(Icons.refresh_rounded),
                     label: const Text('重新练习'),
-                  )
-                else
+                  ),
+                ] else
                   FilledButton.icon(
                     onPressed: _exerciseCount == 0
                         ? null
@@ -292,6 +337,22 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
             const Text(
               '词语完全一致',
               style: TextStyle(color: _accent, fontSize: 12),
+            ),
+          ],
+          if (widget.importedPractice != null) ...[
+            const SizedBox(height: 16),
+            const Text(
+              '上轮回译',
+              style: TextStyle(
+                color: _muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              widget.importedPractice!.previousAnswers[index] ?? '未作答',
+              style: const TextStyle(color: _ink, height: 1.6),
             ),
           ],
         ],

@@ -1,8 +1,10 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'credential_store.dart';
 import 'back_translation_page.dart';
+import 'practice_workbook.dart';
 import 'translation.dart';
 
 void main() {
@@ -88,6 +90,7 @@ class _TranslationHomeState extends State<TranslationHome> {
   List<TranslatedParagraph> _result = const [];
   bool _busy = false;
   bool _loadingSettings = true;
+  bool _importing = false;
   int _completed = 0;
   int _total = 0;
   int _job = 0;
@@ -232,6 +235,43 @@ class _TranslationHomeState extends State<TranslationHome> {
         builder: (_) => BackTranslationPage(paragraphs: List.of(_result)),
       ),
     );
+  }
+
+  Future<void> _importPractice() async {
+    if (_busy || _importing) return;
+    setState(() => _importing = true);
+    try {
+      final file = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        dialogTitle: '导入上次的练习',
+      );
+      if (file == null) return;
+      final workbook = PracticeWorkbook.import(await file.readAsBytes());
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => BackTranslationPage(
+            paragraphs: const [],
+            importedPractice: workbook,
+          ),
+        ),
+      );
+    } on FormatException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('导入失败，请确认文件可读取。')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
   }
 
   @override
@@ -499,6 +539,15 @@ class _TranslationHomeState extends State<TranslationHome> {
                           _busy ? Icons.close_rounded : Icons.auto_awesome),
                       label: Text(_busy ? '取消翻译' : '生成中文参考译文'),
                     ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _busy || _importing ? null : _importPractice,
+                icon: const Icon(Icons.file_upload_outlined),
+                label: Text(_importing ? '正在导入…' : '导入上次练习 XLSX'),
+              ),
             ),
           ],
         ),
