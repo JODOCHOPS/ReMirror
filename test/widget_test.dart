@@ -32,4 +32,20 @@ void main() {
     await tester.pump();
     expect(find.text('Learning'), findsOneWidget);
   });
+
+  testWidgets('source editor can switch to a dictionary reading preview', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const ReMirrorApp());
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('填入示例'));
+    await tester.tap(find.text('填入示例'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('阅读查词'));
+    await tester.tap(find.text('阅读查词'));
+    await tester.pump();
+    expect(find.byType(DictionaryReader), findsOneWidget);
+  });
 }

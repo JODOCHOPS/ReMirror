@@ -831,9 +831,17 @@ class _TranslationHomeState extends State<TranslationHome> {
               Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 12),
               TextButton.icon(
-                onPressed: _openSettings,
-                icon: const Icon(Icons.tune_rounded, size: 16),
-                label: const Text('检查翻译源设置'),
+                onPressed: _source == TranslationSource.offline
+                    ? _translate
+                    : _openSettings,
+                icon: Icon(
+                    _source == TranslationSource.offline
+                        ? Icons.refresh_rounded
+                        : Icons.tune_rounded,
+                    size: 16),
+                label: Text(_source == TranslationSource.offline
+                    ? '重试离线翻译'
+                    : '检查翻译源设置'),
               ),
             ],
           ),
