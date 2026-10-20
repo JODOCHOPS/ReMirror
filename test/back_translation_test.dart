@@ -1,5 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:remirror/ai_review.dart';
 import 'package:remirror/back_translation.dart';
 import 'package:remirror/back_translation_page.dart';
 import 'package:remirror/practice_workbook.dart';
@@ -96,5 +101,76 @@ void main() {
     expect(find.text('上轮回译'), findsOneWidget);
     expect(find.text('The dog sleeps.'), findsOneWidget);
     expect(find.text('导出本轮结果 XLSX'), findsOneWidget);
+  });
+
+  testWidgets('configured AI reviews answered sentences and retries a failure',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var requests = 0;
+    final observedInputs = <List<dynamic>>[];
+    final service = AiReviewService(client: MockClient((request) async {
+      requests++;
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      final messages = body['messages'] as List;
+      final inputs = jsonDecode(messages.last['content'] as String) as List;
+      observedInputs.add(inputs);
+      if (requests == 1) return http.Response('{}', 503);
+      return http.Response(
+        jsonEncode({
+          'choices': [
+            {
+              'message': {
+                'content': jsonEncode({
+                  'reviews': [
+                    {
+                      'id': 0,
+                      'verdict': 'accurate',
+                      'reason': '意思准确，用词不同也正确。',
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    }));
+    await tester.pumpWidget(MaterialApp(
+      home: BackTranslationPage(
+        paragraphs: const [
+          TranslatedParagraph(
+            'The cat sleeps. The sun shines.',
+            '猫睡着了。太阳照耀。',
+          ),
+        ],
+        aiCredentials: const TranslationCredentials(
+          aiEndpoint: 'https://example.com/v1',
+          aiApiKey: 'ai-key',
+          aiModel: 'model-1',
+        ),
+        reviewService: service,
+      ),
+    ));
+    await tester.tap(find.text('点击填写英文回译').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'The feline is asleep.');
+    await tester.tap(find.text('保存句子'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('结束并查看结果'));
+    await tester.pumpAndSettle();
+    expect(requests, 1);
+    expect(find.text('重试点评'), findsOneWidget);
+    expect(find.text('未作答，已跳过点评。'), findsOneWidget);
+    await tester.tap(find.text('重试点评'));
+    await tester.pumpAndSettle();
+    expect(requests, 2);
+    expect(observedInputs.last, hasLength(1));
+    expect(
+        observedInputs.last.first['student_english'], 'The feline is asleep.');
+    expect(find.text('AI 点评 · 准确'), findsOneWidget);
+    expect(find.text('意思准确，用词不同也正确。'), findsOneWidget);
   });
 }

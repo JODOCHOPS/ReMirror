@@ -232,7 +232,10 @@ class _TranslationHomeState extends State<TranslationHome> {
     if (_result.isEmpty) return;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => BackTranslationPage(paragraphs: List.of(_result)),
+        builder: (_) => BackTranslationPage(
+          paragraphs: List.of(_result),
+          aiCredentials: _credentials,
+        ),
       ),
     );
   }
@@ -254,6 +257,7 @@ class _TranslationHomeState extends State<TranslationHome> {
           builder: (_) => BackTranslationPage(
             paragraphs: const [],
             importedPractice: workbook,
+            aiCredentials: _credentials,
           ),
         ),
       );

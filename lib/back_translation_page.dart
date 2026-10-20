@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import 'ai_review.dart';
 import 'back_translation.dart';
 import 'practice_workbook.dart';
 import 'translation.dart';
@@ -15,10 +16,14 @@ class BackTranslationPage extends StatefulWidget {
     super.key,
     required this.paragraphs,
     this.importedPractice,
+    this.aiCredentials,
+    this.reviewService,
   });
 
   final List<TranslatedParagraph> paragraphs;
   final PracticeWorkbook? importedPractice;
+  final TranslationCredentials? aiCredentials;
+  final AiReviewService? reviewService;
 
   @override
   State<BackTranslationPage> createState() => _BackTranslationPageState();
@@ -31,8 +36,26 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
   late final PracticeWorkbook _workbook =
       widget.importedPractice ?? PracticeWorkbook.fromParagraphs(_sentences);
   final Map<int, String> _answers = {};
+  final Map<int, AiReviewResult> _reviews = {};
+  late final AiReviewService _reviewService =
+      widget.reviewService ?? AiReviewService();
   bool _submitted = false;
   bool _exporting = false;
+  bool _reviewing = false;
+  String? _reviewError;
+  int _reviewDone = 0;
+  int _reviewTotal = 0;
+  int _reviewJob = 0;
+
+  bool get _canReview =>
+      widget.aiCredentials?.isConfigured(TranslationSource.ai) ?? false;
+
+  @override
+  void dispose() {
+    _reviewJob++;
+    if (widget.reviewService == null) _reviewService.close();
+    super.dispose();
+  }
 
   int get _exerciseCount =>
       _sentences.where((sentence) => sentence.canAnswer).length;
@@ -99,9 +122,71 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
   }
 
   void _restart() => setState(() {
+        _reviewJob++;
         _answers.clear();
+        _reviews.clear();
+        _reviewError = null;
+        _reviewing = false;
+        _reviewDone = 0;
+        _reviewTotal = 0;
         _submitted = false;
       });
+
+  void _submit() {
+    setState(() => _submitted = true);
+    if (_canReview) _runReview();
+  }
+
+  Future<void> _runReview() async {
+    if (_reviewing || !_canReview) return;
+    final pending = <AiReviewInput>[
+      for (var index = 0; index < _sentences.length; index++)
+        if (_sentences[index].reference != null &&
+            (_answers[index]?.isNotEmpty ?? false) &&
+            !_reviews.containsKey(index))
+          AiReviewInput(
+            index: index,
+            reference: _sentences[index].reference!,
+            original: _sentences[index].original,
+            answer: _answers[index]!,
+          ),
+    ];
+    if (pending.isEmpty) return;
+    final job = ++_reviewJob;
+    setState(() {
+      _reviewing = true;
+      _reviewError = null;
+      _reviewDone = 0;
+      _reviewTotal = pending.length;
+    });
+    try {
+      for (var start = 0; start < pending.length; start += 8) {
+        final end = start + 8 < pending.length ? start + 8 : pending.length;
+        final batch = pending.sublist(start, end);
+        final results = await _reviewService.reviewSentences(
+          batch,
+          widget.aiCredentials!,
+        );
+        if (!mounted || job != _reviewJob) return;
+        setState(() {
+          _reviews.addAll(results);
+          _reviewDone += batch.length;
+        });
+      }
+    } on AiReviewException catch (error) {
+      if (mounted && job == _reviewJob) {
+        setState(() => _reviewError = error.message);
+      }
+    } catch (_) {
+      if (mounted && job == _reviewJob) {
+        setState(() => _reviewError = 'AI 点评出现意外错误，请重试。');
+      }
+    } finally {
+      if (mounted && job == _reviewJob) {
+        setState(() => _reviewing = false);
+      }
+    }
+  }
 
   Future<void> _export() async {
     if (!_submitted || _exporting) return;
@@ -177,6 +262,10 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                 ),
                 const SizedBox(height: 22),
                 _progressCard(),
+                if (_submitted && _canReview) ...[
+                  const SizedBox(height: 12),
+                  _reviewStatus(),
+                ],
                 if (_hasUnmatched) ...[
                   const SizedBox(height: 12),
                   const Text(
@@ -207,9 +296,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                   ),
                 ] else
                   FilledButton.icon(
-                    onPressed: _exerciseCount == 0
-                        ? null
-                        : () => setState(() => _submitted = true),
+                    onPressed: _exerciseCount == 0 ? null : _submit,
                     icon: const Icon(Icons.fact_check_outlined),
                     label: const Text('结束并查看结果'),
                   ),
@@ -249,6 +336,38 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
           ],
         ),
       );
+
+  Widget _reviewStatus() {
+    final message = _reviewing
+        ? 'AI 正在点评：$_reviewDone / $_reviewTotal 句'
+        : _reviewError != null
+            ? _reviewError!
+            : _reviews.isEmpty
+                ? '未作答，已跳过 AI 点评。'
+                : 'AI 已点评 ${_reviews.length} 句';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: _decoration(),
+      child: Row(
+        children: [
+          Icon(
+            _reviewError == null ? Icons.auto_awesome : Icons.error_outline,
+            color: _accent,
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message, style: const TextStyle(color: _ink))),
+          if (_reviewing)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          if (_reviewError != null)
+            TextButton(onPressed: _runReview, child: const Text('重试点评')),
+        ],
+      ),
+    );
+  }
 
   Widget _exerciseCard(int index) {
     final sentence = _sentences[index];
@@ -339,6 +458,10 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
               style: TextStyle(color: _accent, fontSize: 12),
             ),
           ],
+          if (_canReview && sentence.reference != null) ...[
+            const SizedBox(height: 16),
+            _reviewPanel(index, answer),
+          ],
           if (widget.importedPractice != null) ...[
             const SizedBox(height: 16),
             const Text(
@@ -355,6 +478,46 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
               style: const TextStyle(color: _ink, height: 1.6),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _reviewPanel(int index, String? answer) {
+    final review = _reviews[index];
+    final verdict = review == null
+        ? null
+        : switch (review.verdict) {
+            AiReviewVerdict.accurate => '准确',
+            AiReviewVerdict.mostlyAccurate => '基本准确',
+            AiReviewVerdict.needsWork => '需改进',
+          };
+    final color = switch (review?.verdict) {
+      AiReviewVerdict.accurate => _accent,
+      AiReviewVerdict.mostlyAccurate => const Color(0xFF966A15),
+      AiReviewVerdict.needsWork => const Color(0xFFB44A3E),
+      null => _muted,
+    };
+    final detail = answer == null
+        ? '未作答，已跳过点评。'
+        : review?.reason ?? (_reviewing ? '正在生成点评…' : '暂未获得点评，可在上方重试。');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4F9F8),
+        border: Border.all(color: _border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            verdict == null ? 'AI 点评' : 'AI 点评 · $verdict',
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Text(detail, style: const TextStyle(color: _ink, height: 1.5)),
         ],
       ),
     );
