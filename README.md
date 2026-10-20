@@ -5,6 +5,8 @@
 ## 已实现
 
 - Google Cloud Translation Basic (v2)、百度翻译开放平台通用翻译 API、OpenAI Chat Completions 兼容 API。
+- 内置英译简中离线来源：安装后可在首页选择“离线翻译”，无需 API 凭据；模型在设备上运行。
+- 输入英文时可切换到“阅读查词”预览，点词查看中文释义、词性和音标；选中短语可查词，未收录短语以离线机器译文补充。提交回译后的原文同样可查词。参考译文可逐段修改后再开始回译。
 - 用户自行配置服务凭据；凭据通过设备安全存储保存。生成译文时，英文原文发送给当前选择的翻译服务；启用 AI 点评时，点评内容另发送给配置的 AI 服务。
 - 长文按段、按服务请求长度拆分，译文维持原段落顺序；显示进度、取消和错误信息。
 - 自适应 Windows / Android 首屏、过渡动画、示例文章及译文复制。
@@ -34,6 +36,8 @@ Android 运行时请将最后一行改为 `flutter run -d <设备 ID>`。`flutte
 
 若重新生成 Android 工程，请运行 `dart tools/enable_android_internet.dart`，为正式版清单添加网络权限。
 
+离线资源已随仓库保存；如需重建，安装 Python `zstandard` 后运行 `python tools/build_offline_assets.py`。资源来源、固定哈希和许可见 [assets/offline/SOURCES.md](assets/offline/SOURCES.md)。
+
 ## 打包
 
 `.github/workflows/build.yml` 在 GitHub Actions 上生成 Windows 安装程序和 Android APK，并将两者作为工作流构件上传。也可本地运行：
@@ -52,6 +56,7 @@ Windows 安装程序通过 [Inno Setup](https://jrsoftware.org/isinfo.php) 编�
 | Google | Cloud Translation Basic API Key | `translation.googleapis.com/language/translate/v2` |
 | 百度 | APP ID、密钥 | `fanyi-api.baidu.com/api/trans/vip/translate` |
 | AI | HTTPS 基础地址、API Key、模型名 | Chat Completions 兼容接口 |
+| 离线翻译 | 无 | 设备内置模型，无网络请求 |
 
 AI 基础地址通常以 `/v1` 结尾；也可填写完整的 `/chat/completions` 地址。为保护密钥，当前版本只接受 HTTPS 地址。
 

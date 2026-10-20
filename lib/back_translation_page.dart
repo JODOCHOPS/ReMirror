@@ -5,6 +5,7 @@ import 'ai_review.dart';
 import 'back_translation.dart';
 import 'practice_workbook.dart';
 import 'translation.dart';
+import 'dictionary_reader.dart';
 
 const _ink = Color(0xFF1A2832);
 const _muted = Color(0xFF647780);
@@ -439,6 +440,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                 title: '英文原文',
                 text: original ?? '无对应原文句子',
                 words: diff?.original,
+                dictionary: original != null,
                 highlight: const Color(0xFFFFE1DB),
               ),
               SizedBox(width: compact ? 0 : 12, height: compact ? 12 : 0),
@@ -529,6 +531,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
     required String text,
     required Color highlight,
     List<WordDiff>? words,
+    bool dictionary = false,
   }) {
     final panel = Container(
       width: double.infinity,
@@ -550,7 +553,13 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
             ),
           ),
           const SizedBox(height: 7),
-          if (words == null)
+          if (dictionary)
+            DictionaryReader(
+              text: text,
+              differences: words,
+              style: const TextStyle(color: _ink, height: 1.6),
+            )
+          else if (words == null)
             Text(text, style: const TextStyle(color: _ink, height: 1.6))
           else
             SelectableText.rich(

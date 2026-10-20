@@ -16,6 +16,9 @@ dependencies:
   excel: 4.0.6
   file_picker: 13.1.0
   archive: 3.6.1
+  mariannmt_wrapper: ^1.0.2
+  path_provider: ^2.1.5
+  sqlite3: ^3.7.1
 
 dev_dependencies:
   flutter_test:
@@ -24,6 +27,14 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/offline/dictionary.sqlite
+    - assets/offline/model/model.enzh.intgemm.alphas.bin
+    - assets/offline/model/srcvocab.enzh.spm
+    - assets/offline/model/trgvocab.enzh.spm
+    - assets/offline/model/lex.50.50.enzh.s2t.bin
+    - assets/offline/licenses/ECDICT-MIT.txt
+    - assets/offline/licenses/Mozilla-MPL-2.0.txt
   fonts:
     - family: LiberationSerif
       fonts:

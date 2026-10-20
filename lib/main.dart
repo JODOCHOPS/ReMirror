@@ -6,6 +6,7 @@ import 'credential_store.dart';
 import 'back_translation_page.dart';
 import 'practice_workbook.dart';
 import 'translation.dart';
+import 'dictionary_reader.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -95,6 +96,7 @@ class _TranslationHomeState extends State<TranslationHome> {
   int _total = 0;
   int _job = 0;
   String? _error;
+  bool _readingPreview = false;
 
   @override
   void initState() {
@@ -238,6 +240,40 @@ class _TranslationHomeState extends State<TranslationHome> {
         ),
       ),
     );
+  }
+
+  Future<void> _editReference(int index) async {
+    var draft = _result[index].translated;
+    final edited = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('修改第 ${index + 1} 段参考译文'),
+        content: SizedBox(
+          width: 520,
+          child: TextFormField(
+            initialValue: draft,
+            autofocus: true,
+            minLines: 4,
+            maxLines: 10,
+            onChanged: (value) => draft = value,
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context), child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, draft),
+              child: const Text('保存')),
+        ],
+      ),
+    );
+    if (edited == null || edited.trim().isEmpty || !mounted) return;
+    setState(() {
+      final updated = List<TranslatedParagraph>.of(_result);
+      updated[index] =
+          TranslatedParagraph(updated[index].original, edited.trim());
+      _result = updated;
+    });
   }
 
   Future<void> _importPractice() async {
@@ -444,6 +480,21 @@ class _TranslationHomeState extends State<TranslationHome> {
           children: [
             _cardHeading(Icons.article_outlined, '英文原文', 'ORIGINAL TEXT'),
             const SizedBox(height: 20),
+            if (_result.isEmpty && _original.text.trim().isNotEmpty) ...[
+              Align(
+                alignment: Alignment.centerRight,
+                child: SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('编辑')),
+                    ButtonSegment(value: true, label: Text('阅读查词')),
+                  ],
+                  selected: {_readingPreview},
+                  onSelectionChanged: (selection) =>
+                      setState(() => _readingPreview = selection.first),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             if (_result.isNotEmpty)
               Container(
                 height: 355,
@@ -478,23 +529,32 @@ class _TranslationHomeState extends State<TranslationHome> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: _border),
                 ),
-                child: TextField(
-                  controller: _original,
-                  expands: true,
-                  maxLines: null,
-                  minLines: null,
-                  textAlignVertical: TextAlignVertical.top,
-                  style:
-                      const TextStyle(fontSize: 15, height: 1.65, color: _ink),
-                  decoration: const InputDecoration(
-                    hintText: '在这里粘贴英文文章…\n\n段落会被保留下来，方便后续回译练习。',
-                    hintStyle: TextStyle(color: Color(0xFF9BAAAE)),
-                    contentPadding: EdgeInsets.all(20),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                  ),
-                ),
+                child: _readingPreview
+                    ? SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: DictionaryReader(
+                          text: _original.text,
+                          style: const TextStyle(
+                              fontSize: 15, height: 1.65, color: _ink),
+                        ),
+                      )
+                    : TextField(
+                        controller: _original,
+                        expands: true,
+                        maxLines: null,
+                        minLines: null,
+                        textAlignVertical: TextAlignVertical.top,
+                        style: const TextStyle(
+                            fontSize: 15, height: 1.65, color: _ink),
+                        decoration: const InputDecoration(
+                          hintText: '在这里粘贴英文文章…\n\n段落会被保留下来，方便后续回译练习。',
+                          hintStyle: TextStyle(color: Color(0xFF9BAAAE)),
+                          contentPadding: EdgeInsets.all(20),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                        ),
+                      ),
               ),
             const SizedBox(height: 14),
             Row(
@@ -619,10 +679,12 @@ class _TranslationHomeState extends State<TranslationHome> {
               children: [
                 Icon(Icons.lock_outline_rounded, size: 15, color: _muted),
                 const SizedBox(width: 6),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    '凭据保存在本机安全存储中',
-                    style: TextStyle(color: _muted, fontSize: 12),
+                    _source == TranslationSource.offline
+                        ? '离线翻译在本机完成，无需 API 凭据'
+                        : '凭据保存在本机安全存储中',
+                    style: const TextStyle(color: _muted, fontSize: 12),
                   ),
                 ),
                 IconButton.outlined(
@@ -810,6 +872,11 @@ class _TranslationHomeState extends State<TranslationHome> {
                   style:
                       const TextStyle(color: _ink, fontSize: 15, height: 1.8),
                 ),
+              ),
+              IconButton(
+                tooltip: '修改本段译文',
+                onPressed: () => _editReference(index),
+                icon: const Icon(Icons.edit_outlined, size: 18),
               ),
             ],
           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remirror/main.dart';
+import 'package:remirror/dictionary_reader.dart';
 
 void main() {
   testWidgets('the first translation screen works in a narrow viewport', (
@@ -19,5 +20,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('翻译源设置'), findsOneWidget);
     expect(find.text('Google Cloud Translation'), findsOneWidget);
+  });
+
+  testWidgets('a tapped English word opens the dictionary dialog',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: DictionaryReader(text: 'Learning a language.')),
+    ));
+    await tester.tapAt(tester.getTopLeft(find.byType(DictionaryReader)) +
+        const Offset(25, 12));
+    await tester.pump();
+    expect(find.text('Learning'), findsOneWidget);
   });
 }

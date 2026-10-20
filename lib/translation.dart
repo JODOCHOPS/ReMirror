@@ -4,19 +4,23 @@ import 'package:crypto/crypto.dart';
 import 'package:html_unescape/html_unescape.dart';
 import 'package:http/http.dart' as http;
 
-enum TranslationSource { google, baidu, ai }
+import 'offline_resources.dart';
+
+enum TranslationSource { google, baidu, ai, offline }
 
 extension TranslationSourceLabel on TranslationSource {
   String get label => switch (this) {
         TranslationSource.google => 'Google 翻译',
         TranslationSource.baidu => '百度翻译',
         TranslationSource.ai => 'AI 翻译',
+        TranslationSource.offline => '离线翻译',
       };
 
   String get shortLabel => switch (this) {
         TranslationSource.google => 'Google',
         TranslationSource.baidu => '百度',
         TranslationSource.ai => 'AI',
+        TranslationSource.offline => '离线',
       };
 }
 
@@ -44,6 +48,7 @@ class TranslationCredentials {
         TranslationSource.ai => aiEndpoint.trim().isNotEmpty &&
             aiApiKey.trim().isNotEmpty &&
             aiModel.trim().isNotEmpty,
+        TranslationSource.offline => true,
       };
 }
 
@@ -95,14 +100,19 @@ List<String> splitForRequest(String paragraph, int maxCharacters) {
 }
 
 class TranslationService {
-  TranslationService({http.Client? client, DateTime Function()? now})
+  TranslationService(
+      {http.Client? client,
+      DateTime Function()? now,
+      OfflineTranslator? offlineTranslator})
       : _client = client ?? http.Client(),
         _ownsClient = client == null,
-        _now = now ?? DateTime.now;
+        _now = now ?? DateTime.now,
+        _offlineTranslator = offlineTranslator ?? bundledTranslator;
 
   final http.Client _client;
   final bool _ownsClient;
   final DateTime Function() _now;
+  final OfflineTranslator _offlineTranslator;
   final HtmlUnescape _unescape = HtmlUnescape();
 
   void close() {
@@ -127,6 +137,7 @@ class TranslationService {
       TranslationSource.baidu => 900,
       TranslationSource.google => 4500,
       TranslationSource.ai => 3000,
+      TranslationSource.offline => 800,
     };
     final chunks = paragraphs
         .map((paragraph) => splitForRequest(paragraph, limit))
@@ -168,7 +179,16 @@ class TranslationService {
             credentials.baiduSecret,
           ),
         TranslationSource.ai => _ai(text, credentials),
+        TranslationSource.offline => _offline(text),
       };
+
+  Future<String> _offline(String text) async {
+    try {
+      return await _offlineTranslator.translate(text);
+    } catch (_) {
+      throw const TranslationException('离线模型加载或翻译失败，请检查安装文件后重试。');
+    }
+  }
 
   Future<String> _google(String text, String apiKey) async {
     final uri = Uri.https(
