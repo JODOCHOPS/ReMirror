@@ -37,6 +37,11 @@ jobs:
       - run: flutter analyze
       - run: flutter test
       - run: flutter build windows --release
+      - name: Smoke test offline translation
+        shell: pwsh
+        run: |
+          $env:PATH = "${{ github.workspace }}\build\windows\x64\runner\Release;$env:PATH"
+          dart run tools/smoke_offline.dart
       - name: Package installer
         shell: pwsh
         run: |

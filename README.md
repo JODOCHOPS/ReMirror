@@ -32,7 +32,7 @@ flutter test
 flutter run -d windows
 ```
 
-Android 运行时请将最后一行改为 `flutter run -d <设备 ID>`。`flutter devices` 可列出设备。
+Android 运行时请将最后一行改为 `flutter run -d <设备 ID>`。`flutter devices` 可列出设备。离线模型依赖 Android 9（API 28）或更新版本。
 
 若重新生成 Android 工程，请运行 `dart tools/enable_android_internet.dart`，为正式版清单添加网络权限。
 

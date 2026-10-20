@@ -1,5 +1,8 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
+# Vendored Marian subprojects declare older CMake versions. Keep the MSVC
+# runtime selection policy active through those nested project() calls.
+set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
 if(POLICY CMP0091)
   cmake_policy(SET CMP0091 NEW)
 endif()
@@ -59,14 +62,6 @@ add_subdirectory("runner")
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
-
-# The vendored Marian libraries use the static MSVC runtime. Match them for
-# the FFI DLL so its link does not mix /MT and /MD object files.
-if(MSVC AND TARGET mariannmt_wrapper)
-  set_property(TARGET mariannmt_wrapper PROPERTY
-    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
-
 
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can
