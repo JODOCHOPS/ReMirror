@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -7,6 +8,8 @@ import 'back_translation_page.dart';
 import 'practice_workbook.dart';
 import 'translation.dart';
 import 'dictionary_reader.dart';
+import 'practice_history.dart';
+import 'windows_dashboard.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,29 +31,48 @@ class ReMirrorApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
-          fontFamily: 'LiberationSerif',
+          fontFamily: defaultTargetPlatform == TargetPlatform.windows
+              ? 'AlibabaPuHuiTi'
+              : 'LiberationSerif',
           fontFamilyFallback: const ['AlibabaPuHuiTi'],
-          scaffoldBackgroundColor: _background,
+          scaffoldBackgroundColor:
+              defaultTargetPlatform == TargetPlatform.windows
+                  ? const Color(0xFFF4FAFF)
+                  : _background,
           colorScheme: ColorScheme.fromSeed(
-            seedColor: _accent,
+            seedColor: defaultTargetPlatform == TargetPlatform.windows
+                ? const Color(0xFF168DF4)
+                : _accent,
             surface: Colors.white,
           ),
-          textTheme: const TextTheme(
+          textTheme: TextTheme(
             headlineLarge: TextStyle(
               fontSize: 36,
               fontWeight: FontWeight.w700,
-              color: _ink,
+              color: defaultTargetPlatform == TargetPlatform.windows
+                  ? const Color(0xFF0B173B)
+                  : _ink,
             ),
             titleLarge: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
-              color: _ink,
+              color: defaultTargetPlatform == TargetPlatform.windows
+                  ? const Color(0xFF0B173B)
+                  : _ink,
             ),
-            bodyMedium: TextStyle(fontSize: 14, color: _ink, height: 1.6),
+            bodyMedium: TextStyle(
+              fontSize: 14,
+              color: defaultTargetPlatform == TargetPlatform.windows
+                  ? const Color(0xFF0B173B)
+                  : _ink,
+              height: 1.6,
+            ),
           ),
           filledButtonTheme: FilledButtonThemeData(
             style: FilledButton.styleFrom(
-              backgroundColor: _accent,
+              backgroundColor: defaultTargetPlatform == TargetPlatform.windows
+                  ? const Color(0xFF0B173B)
+                  : _accent,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
               shape: RoundedRectangleBorder(
@@ -66,7 +88,12 @@ class ReMirrorApp extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: _accent, width: 1.5),
+              borderSide: BorderSide(
+                color: defaultTargetPlatform == TargetPlatform.windows
+                    ? const Color(0xFF168DF4)
+                    : _accent,
+                width: 1.5,
+              ),
             ),
           ),
         ),
@@ -87,7 +114,15 @@ class _TranslationHomeState extends State<TranslationHome> {
   final _store = const CredentialStore();
   final _service = TranslationService();
   TranslationCredentials _credentials = const TranslationCredentials();
-  TranslationSource _source = TranslationSource.google;
+  TranslationSource _source = defaultTargetPlatform == TargetPlatform.windows
+      ? TranslationSource.offline
+      : TranslationSource.google;
+  final _historyStore = const PracticeHistoryStore();
+  List<PracticeSession> _sessions = [];
+  Future<void> _pendingHistoryWrite = Future.value();
+  String? _activeSessionId;
+  String? _historyError;
+  bool _loadingHistory = true;
   List<TranslatedParagraph> _result = const [];
   bool _busy = false;
   bool _loadingSettings = true;
@@ -103,6 +138,7 @@ class _TranslationHomeState extends State<TranslationHome> {
     super.initState();
     _original.addListener(() => setState(() {}));
     _loadCredentials();
+    if (defaultTargetPlatform == TargetPlatform.windows) _loadHistory();
   }
 
   Future<void> _loadCredentials() async {
@@ -116,6 +152,77 @@ class _TranslationHomeState extends State<TranslationHome> {
     } finally {
       if (mounted) setState(() => _loadingSettings = false);
     }
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final sessions = await _historyStore.load();
+      if (mounted) {
+        setState(() {
+          final merged = <String, PracticeSession>{
+            for (final session in sessions) session.id: session,
+            for (final session in _sessions) session.id: session,
+          };
+          _sessions = merged.values.toList()
+            ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+          _loadingHistory = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loadingHistory = false;
+          _historyError = '无法读取本地练习记录';
+        });
+      }
+    }
+  }
+
+  Future<void> _saveHistory() {
+    final snapshot = List<PracticeSession>.of(_sessions);
+    _pendingHistoryWrite = _pendingHistoryWrite
+        .catchError((Object _) {})
+        .then((_) => _historyStore.save(snapshot));
+    return _pendingHistoryWrite;
+  }
+
+  Future<void> _upsertSession(PracticeSession session) async {
+    setState(() {
+      _sessions.removeWhere((item) => item.id == session.id);
+      _sessions.insert(0, session);
+      _sessions.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      _historyError = null;
+    });
+    try {
+      await _saveHistory();
+    } catch (_) {
+      if (mounted) setState(() => _historyError = '练习记录保存失败');
+    }
+  }
+
+  String _sessionTitle(String text) {
+    final firstLine = text.trim().split(RegExp(r'\r?\n')).first.trim();
+    return firstLine.length > 48 ? '${firstLine.substring(0, 48)}…' : firstLine;
+  }
+
+  PracticeSession _newSession({
+    required String title,
+    required String source,
+    required List<TranslatedParagraph> paragraphs,
+    PracticeWorkbook? workbook,
+  }) {
+    final now = DateTime.now();
+    return PracticeSession(
+      id: now.microsecondsSinceEpoch.toString(),
+      title: title,
+      source: source,
+      createdAt: now,
+      updatedAt: now,
+      paragraphs: paragraphs,
+      importedPractice: workbook,
+      answers: const {},
+      submitted: false,
+    );
   }
 
   @override
@@ -174,7 +281,12 @@ class _TranslationHomeState extends State<TranslationHome> {
           }
         },
       );
-      if (mounted && job == _job) setState(() => _result = result);
+      if (mounted && job == _job) {
+        setState(() {
+          _result = result;
+          _activeSessionId = null;
+        });
+      }
     } on TranslationException catch (error) {
       if (mounted && job == _job) setState(() => _error = error.message);
     } catch (_) {
@@ -214,6 +326,7 @@ class _TranslationHomeState extends State<TranslationHome> {
     setState(() {
       _source = source;
       _result = const [];
+      _activeSessionId = null;
       _error = null;
     });
   }
@@ -230,9 +343,24 @@ class _TranslationHomeState extends State<TranslationHome> {
     }
   }
 
-  void _openPractice() {
+  Future<void> _openPractice() async {
     if (_result.isEmpty) return;
-    Navigator.of(context).push(
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      final existing = _sessions.where((item) => item.id == _activeSessionId);
+      final session = existing.isNotEmpty
+          ? existing.first
+          : _newSession(
+              title: _sessionTitle(_original.text),
+              source: _source.label,
+              paragraphs: List.of(_result),
+            );
+      _activeSessionId = session.id;
+      if (existing.isEmpty) await _upsertSession(session);
+      if (!mounted) return;
+      await _openSession(session);
+      return;
+    }
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => BackTranslationPage(
           paragraphs: List.of(_result),
@@ -240,6 +368,53 @@ class _TranslationHomeState extends State<TranslationHome> {
         ),
       ),
     );
+  }
+
+  Future<void> _openSession(PracticeSession session) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BackTranslationPage(
+          paragraphs: session.paragraphs,
+          importedPractice: session.importedPractice,
+          aiCredentials: _credentials,
+          initialAnswers: session.answers,
+          initiallySubmitted: session.submitted,
+          onProgress: (answers, submitted) {
+            _upsertSession(session.withProgress(answers, submitted));
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteSession(PracticeSession session) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除练习记录？'),
+        content: Text('“${session.title}”及其作答会从本机删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _sessions.removeWhere((item) => item.id == session.id);
+      if (_activeSessionId == session.id) _activeSessionId = null;
+    });
+    try {
+      await _saveHistory();
+    } catch (_) {
+      if (mounted) setState(() => _historyError = '练习记录保存失败');
+    }
   }
 
   Future<void> _editReference(int index) async {
@@ -273,6 +448,7 @@ class _TranslationHomeState extends State<TranslationHome> {
       updated[index] =
           TranslatedParagraph(updated[index].original, edited.trim());
       _result = updated;
+      _activeSessionId = null;
     });
   }
 
@@ -288,6 +464,18 @@ class _TranslationHomeState extends State<TranslationHome> {
       if (file == null) return;
       final workbook = PracticeWorkbook.import(await file.readAsBytes());
       if (!mounted) return;
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        final session = _newSession(
+          title: file.name
+              .replaceFirst(RegExp(r'\.xlsx$', caseSensitive: false), ''),
+          source: 'XLSX 导入',
+          paragraphs: const [],
+          workbook: workbook,
+        );
+        await _upsertSession(session);
+        if (mounted) await _openSession(session);
+        return;
+      }
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => BackTranslationPage(
@@ -314,53 +502,109 @@ class _TranslationHomeState extends State<TranslationHome> {
     }
   }
 
+  void _newArticle() {
+    setState(() {
+      _result = const [];
+      _activeSessionId = null;
+      _readingPreview = false;
+      _error = null;
+      _original.clear();
+    });
+  }
+
+  void _fillSample() {
+    _original.text = 'Learning a language changes the way we notice the world. '
+        'A familiar street can suddenly offer new words on every sign.\n\n'
+        'Progress rarely happens in a straight line. Some days, '
+        'a single sentence takes time to understand. That effort '
+        'is part of learning.';
+  }
+
+  void _startOrContinue() {
+    if (_result.isNotEmpty) {
+      _openPractice();
+    } else if (_sessions.isNotEmpty && !_sessions.first.submitted) {
+      _openSession(_sessions.first);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-        body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 880;
-              return SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: compact ? 20 : 36,
-                  vertical: compact ? 20 : 30,
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1240),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _header(compact),
-                        SizedBox(height: compact ? 36 : 54),
-                        _intro(compact),
-                        const SizedBox(height: 28),
-                        _steps(compact),
-                        const SizedBox(height: 28),
-                        if (compact) ...[
-                          _sourceCard(),
-                          const SizedBox(height: 18),
-                          _resultCard(),
-                        ] else
-                          Row(
+  Widget build(BuildContext context) =>
+      defaultTargetPlatform == TargetPlatform.windows
+          ? WindowsDashboard(
+              original: _original,
+              result: _result,
+              source: _source,
+              sessions: _sessions,
+              activeSessionId: _activeSessionId,
+              busy: _busy,
+              importing: _importing,
+              loadingHistory: _loadingHistory,
+              readingPreview: _readingPreview,
+              completed: _completed,
+              total: _total,
+              error: _error,
+              historyError: _historyError,
+              onSettings: _openSettings,
+              onSourceChanged: _chooseSource,
+              onTranslate: _translate,
+              onCancel: _cancel,
+              onPractice: _startOrContinue,
+              onImport: _importPractice,
+              onOpenSession: _openSession,
+              onDeleteSession: _deleteSession,
+              onEditReference: _editReference,
+              onReadingPreviewChanged: (value) =>
+                  setState(() => _readingPreview = value),
+              onNewArticle: _newArticle,
+              onSample: _fillSample,
+            )
+          : Scaffold(
+              body: SafeArea(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 880;
+                    return SingleChildScrollView(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: compact ? 20 : 36,
+                        vertical: compact ? 20 : 30,
+                      ),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1240),
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(child: _sourceCard()),
-                              const SizedBox(width: 20),
-                              Expanded(child: _resultCard()),
+                              _header(compact),
+                              SizedBox(height: compact ? 36 : 54),
+                              _intro(compact),
+                              const SizedBox(height: 28),
+                              _steps(compact),
+                              const SizedBox(height: 28),
+                              if (compact) ...[
+                                _sourceCard(),
+                                const SizedBox(height: 18),
+                                _resultCard(),
+                              ] else
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(child: _sourceCard()),
+                                    const SizedBox(width: 20),
+                                    Expanded(child: _resultCard()),
+                                  ],
+                                ),
+                              const SizedBox(height: 24),
+                              _footer(),
                             ],
                           ),
-                        const SizedBox(height: 24),
-                        _footer(),
-                      ],
-                    ),
-                  ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
-        ),
-      );
+              ),
+            );
 
   Widget _header(bool compact) => Row(
         children: [
@@ -1012,6 +1256,11 @@ class _SettingsDialogState extends State<SettingsDialog> {
   @override
   Widget build(BuildContext context) => Dialog(
         insetPadding: const EdgeInsets.all(16),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(
+              defaultTargetPlatform == TargetPlatform.windows ? 20 : 28),
+        ),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 570, maxHeight: 720),
           child: Padding(
@@ -1021,13 +1270,15 @@ class _SettingsDialogState extends State<SettingsDialog> {
               children: [
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         '翻译源设置',
                         style: TextStyle(
                           fontSize: 21,
                           fontWeight: FontWeight.w700,
-                          color: _ink,
+                          color: defaultTargetPlatform == TargetPlatform.windows
+                              ? const Color(0xFF0B173B)
+                              : _ink,
                         ),
                       ),
                     ),
@@ -1038,10 +1289,11 @@ class _SettingsDialogState extends State<SettingsDialog> {
                     ),
                   ],
                 ),
-                const Text(
-                  '填写你自己的服务凭据；所有设置仅保存在本机。',
-                  style: TextStyle(color: _muted, fontSize: 13),
-                ),
+                if (defaultTargetPlatform != TargetPlatform.windows)
+                  const Text(
+                    '填写你自己的服务凭据；所有设置仅保存在本机。',
+                    style: TextStyle(color: _muted, fontSize: 13),
+                  ),
                 const SizedBox(height: 18),
                 Expanded(
                   child: ListView(
@@ -1083,12 +1335,15 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    const Expanded(
-                      child: Text(
-                        '翻译请求会直接发送给所选服务。',
-                        style: TextStyle(color: _muted, fontSize: 11),
+                    if (defaultTargetPlatform == TargetPlatform.windows)
+                      const Spacer()
+                    else
+                      const Expanded(
+                        child: Text(
+                          '翻译请求会直接发送给所选服务。',
+                          style: TextStyle(color: _muted, fontSize: 11),
+                        ),
                       ),
-                    ),
                     FilledButton(
                       onPressed: _saving ? null : _save,
                       child: Text(_saving ? '保存中…' : '保存设置'),
@@ -1108,10 +1363,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
           children: [
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: _ink,
+                color: defaultTargetPlatform == TargetPlatform.windows
+                    ? const Color(0xFF0B173B)
+                    : _ink,
               ),
             ),
             const SizedBox(height: 3),

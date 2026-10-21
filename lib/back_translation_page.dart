@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'ai_review.dart';
@@ -19,12 +20,18 @@ class BackTranslationPage extends StatefulWidget {
     this.importedPractice,
     this.aiCredentials,
     this.reviewService,
+    this.initialAnswers = const {},
+    this.initiallySubmitted = false,
+    this.onProgress,
   });
 
   final List<TranslatedParagraph> paragraphs;
   final PracticeWorkbook? importedPractice;
   final TranslationCredentials? aiCredentials;
   final AiReviewService? reviewService;
+  final Map<int, String> initialAnswers;
+  final bool initiallySubmitted;
+  final void Function(Map<int, String> answers, bool submitted)? onProgress;
 
   @override
   State<BackTranslationPage> createState() => _BackTranslationPageState();
@@ -40,7 +47,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
   final Map<int, AiReviewResult> _reviews = {};
   late final AiReviewService _reviewService =
       widget.reviewService ?? AiReviewService();
-  bool _submitted = false;
+  late bool _submitted = widget.initiallySubmitted;
   bool _exporting = false;
   bool _reviewing = false;
   String? _reviewError;
@@ -50,6 +57,18 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
 
   bool get _canReview =>
       widget.aiCredentials?.isConfigured(TranslationSource.ai) ?? false;
+  bool get _windows => defaultTargetPlatform == TargetPlatform.windows;
+  Color get _uiAccent => _windows ? const Color(0xFF168DF4) : _accent;
+  Color get _uiBorder => _windows ? const Color(0xFFE2E9F3) : _border;
+
+  @override
+  void initState() {
+    super.initState();
+    _answers.addAll(widget.initialAnswers);
+  }
+
+  void _notifyProgress() =>
+      widget.onProgress?.call(Map<int, String>.of(_answers), _submitted);
 
   @override
   void dispose() {
@@ -119,22 +138,27 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
           _answers[index] = answer.trim();
         }
       });
+      _notifyProgress();
     }
   }
 
-  void _restart() => setState(() {
-        _reviewJob++;
-        _answers.clear();
-        _reviews.clear();
-        _reviewError = null;
-        _reviewing = false;
-        _reviewDone = 0;
-        _reviewTotal = 0;
-        _submitted = false;
-      });
+  void _restart() {
+    setState(() {
+      _reviewJob++;
+      _answers.clear();
+      _reviews.clear();
+      _reviewError = null;
+      _reviewing = false;
+      _reviewDone = 0;
+      _reviewTotal = 0;
+      _submitted = false;
+    });
+    _notifyProgress();
+  }
 
   void _submit() {
     setState(() => _submitted = true);
+    _notifyProgress();
     if (_canReview) _runReview();
   }
 
@@ -219,6 +243,9 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      return _buildWindows(context);
+    }
     final compact = MediaQuery.sizeOf(context).width < 760;
     return Scaffold(
       appBar: AppBar(
@@ -309,6 +336,179 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
     );
   }
 
+  Widget _buildWindows(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 760;
+    final count = _exerciseCount;
+    final done = _answeredCount;
+    final ratio = count == 0 ? 0.0 : done / count;
+    return Scaffold(
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFE4FAFF), Color(0xFFF8FBFF), Color(0xFFDDF8FF)],
+          ),
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1160),
+            child: ListView(
+              padding: EdgeInsets.all(compact ? 16 : 30),
+              children: [
+                Container(
+                  padding: EdgeInsets.all(compact ? 18 : 28),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x12005A88), blurRadius: 28),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            tooltip: '返回首页',
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.arrow_back_rounded),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _submitted ? '回译结果' : '逐句回译',
+                            style: const TextStyle(
+                              color: Color(0xFF0B173B),
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (_submitted)
+                            FilledButton.icon(
+                              onPressed: _exporting ? null : _export,
+                              icon: const Icon(Icons.file_download_outlined),
+                              label: Text(_exporting ? '导出中…' : '导出 XLSX'),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F6FF),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Text('进度  $done / $count 句',
+                                    style: const TextStyle(
+                                        color: Color(0xFF0B173B),
+                                        fontWeight: FontWeight.w700)),
+                                const Spacer(),
+                                Text('${(ratio * 100).round()}%',
+                                    style: const TextStyle(
+                                        color: Color(0xFF168DF4),
+                                        fontWeight: FontWeight.w800)),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            LinearProgressIndicator(
+                              value: ratio,
+                              minHeight: 8,
+                              borderRadius: BorderRadius.circular(99),
+                              color: const Color(0xFF168DF4),
+                              backgroundColor: const Color(0xFFDFE5EF),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_submitted && _canReview) ...[
+                        const SizedBox(height: 14),
+                        _reviewStatus(),
+                      ],
+                      if (_hasUnmatched) ...[
+                        const SizedBox(height: 12),
+                        const Text('部分句子没有对应原文或译文，结果按段落顺序显示。',
+                            style: TextStyle(color: Color(0xFF536484))),
+                      ],
+                      const SizedBox(height: 20),
+                      for (var index = 0; index < _sentences.length; index++)
+                        if (_submitted || _sentences[index].canAnswer) ...[
+                          _submitted
+                              ? _resultCard(index, compact)
+                              : _windowsExerciseCard(index),
+                          const SizedBox(height: 12),
+                        ],
+                      const SizedBox(height: 8),
+                      if (_submitted)
+                        OutlinedButton.icon(
+                          onPressed: _restart,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('重新练习'),
+                        )
+                      else
+                        FilledButton.icon(
+                          onPressed: count == 0 ? null : _submit,
+                          icon: const Icon(Icons.fact_check_outlined),
+                          label: const Text('结束并查看结果'),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _windowsExerciseCard(int index) {
+    final sentence = _sentences[index];
+    final answer = _answers[index];
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFFE2E9F3)),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _editSentence(index),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  '第 ${sentence.paragraphNumber} 段 · 第 ${sentence.sentenceNumber} 句',
+                  style: const TextStyle(
+                      color: Color(0xFF168DF4),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 10),
+              Text(sentence.reference!,
+                  style: const TextStyle(
+                      color: Color(0xFF0B173B), fontSize: 16, height: 1.6)),
+              const SizedBox(height: 10),
+              Text(answer == null ? '点击填写英文回译' : '你的回译：$answer',
+                  style: TextStyle(
+                      color: answer == null
+                          ? const Color(0xFF168DF4)
+                          : const Color(0xFF536484),
+                      fontSize: 13)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _progressCard() => Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: _decoration(),
@@ -344,7 +544,9 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
         : _reviewError != null
             ? _reviewError!
             : _reviews.isEmpty
-                ? '未作答，已跳过 AI 点评。'
+                ? _answeredCount == 0
+                    ? '未作答，已跳过 AI 点评。'
+                    : '点评结果未保存，可重新请求。'
                 : 'AI 已点评 ${_reviews.length} 句';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
@@ -365,6 +567,11 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
             ),
           if (_reviewError != null)
             TextButton(onPressed: _runReview, child: const Text('重试点评')),
+          if (!_reviewing &&
+              _reviewError == null &&
+              _reviews.isEmpty &&
+              _answeredCount > 0)
+            TextButton(onPressed: _runReview, child: const Text('重新点评')),
         ],
       ),
     );
@@ -455,9 +662,9 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
           ),
           if (diff?.exactMatch == true) ...[
             const SizedBox(height: 12),
-            const Text(
+            Text(
               '词语完全一致',
-              style: TextStyle(color: _accent, fontSize: 12),
+              style: TextStyle(color: _uiAccent, fontSize: 12),
             ),
           ],
           if (_canReview && sentence.reference != null) ...[
@@ -507,8 +714,8 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F9F8),
-        border: Border.all(color: _border),
+        color: _windows ? const Color(0xFFF5F8FF) : const Color(0xFFF4F9F8),
+        border: Border.all(color: _uiBorder),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -537,8 +744,8 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFCFB),
-        border: Border.all(color: _border),
+        color: _windows ? const Color(0xFFF8FAFF) : const Color(0xFFFAFCFB),
+        border: Border.all(color: _uiBorder),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -588,8 +795,8 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
 
   Widget _label(PracticeSentence sentence) => Text(
         '第 ${sentence.paragraphNumber} 段 · 第 ${sentence.sentenceNumber} 句',
-        style: const TextStyle(
-          color: _accent,
+        style: TextStyle(
+          color: _uiAccent,
           fontSize: 12,
           fontWeight: FontWeight.w700,
         ),
@@ -598,6 +805,6 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
   BoxDecoration _decoration() => BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _border),
+        border: Border.all(color: _uiBorder),
       );
 }

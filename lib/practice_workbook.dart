@@ -49,6 +49,49 @@ class PracticeWorkbook {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'sentences': [
+          for (final sentence in sentences)
+            {
+              'paragraphNumber': sentence.paragraphNumber,
+              'sentenceNumber': sentence.sentenceNumber,
+              'original': sentence.original,
+              'reference': sentence.reference,
+            },
+        ],
+        'rowIndexes': rowIndexes,
+        'previousAnswers': previousAnswers.map(
+          (key, value) => MapEntry(key.toString(), value),
+        ),
+        'roundNumber': roundNumber,
+        'chineseTitle': chineseTitle,
+        'englishTitle': englishTitle,
+        'sourceBytes': sourceBytes == null ? null : base64Encode(sourceBytes!),
+      };
+
+  factory PracticeWorkbook.fromJson(Map<String, dynamic> json) =>
+      PracticeWorkbook._(
+        sentences: (json['sentences'] as List).map((item) {
+          final sentence = item as Map<String, dynamic>;
+          return PracticeSentence(
+            paragraphNumber: sentence['paragraphNumber'] as int,
+            sentenceNumber: sentence['sentenceNumber'] as int,
+            original: sentence['original'] as String?,
+            reference: sentence['reference'] as String?,
+          );
+        }).toList(),
+        rowIndexes: (json['rowIndexes'] as List).cast<int>(),
+        previousAnswers: (json['previousAnswers'] as Map).map(
+          (key, value) => MapEntry(int.parse(key as String), value as String),
+        ),
+        roundNumber: json['roundNumber'] as int,
+        chineseTitle: json['chineseTitle'] as String,
+        englishTitle: json['englishTitle'] as String,
+        sourceBytes: json['sourceBytes'] == null
+            ? null
+            : base64Decode(json['sourceBytes'] as String),
+      );
+
   factory PracticeWorkbook.import(Uint8List bytes) {
     final Excel excel;
     try {
