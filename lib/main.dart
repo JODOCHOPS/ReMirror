@@ -10,17 +10,17 @@ import 'translation.dart';
 import 'dictionary_reader.dart';
 import 'practice_history.dart';
 import 'windows_dashboard.dart';
+import 'industrial_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const ReMirrorApp());
 }
 
-const _ink = Color(0xFF1A2832);
-const _muted = Color(0xFF647780);
-const _accent = Color(0xFF187A82);
-const _border = Color(0xFFDCE6E5);
-const _background = Color(0xFFF5F8F7);
+const _ink = IndustrialPalette.ink;
+const _muted = IndustrialPalette.muted;
+const _accent = IndustrialPalette.accent;
+const _border = IndustrialPalette.border;
 
 class ReMirrorApp extends StatelessWidget {
   const ReMirrorApp({super.key});
@@ -29,74 +29,7 @@ class ReMirrorApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
         title: 'ReMirror',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          fontFamily: defaultTargetPlatform == TargetPlatform.windows
-              ? 'AlibabaPuHuiTi'
-              : 'LiberationSerif',
-          fontFamilyFallback: const ['AlibabaPuHuiTi'],
-          scaffoldBackgroundColor:
-              defaultTargetPlatform == TargetPlatform.windows
-                  ? const Color(0xFFF4FAFF)
-                  : _background,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: defaultTargetPlatform == TargetPlatform.windows
-                ? const Color(0xFF168DF4)
-                : _accent,
-            surface: Colors.white,
-          ),
-          textTheme: TextTheme(
-            headlineLarge: TextStyle(
-              fontSize: 36,
-              fontWeight: FontWeight.w700,
-              color: defaultTargetPlatform == TargetPlatform.windows
-                  ? const Color(0xFF0B173B)
-                  : _ink,
-            ),
-            titleLarge: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: defaultTargetPlatform == TargetPlatform.windows
-                  ? const Color(0xFF0B173B)
-                  : _ink,
-            ),
-            bodyMedium: TextStyle(
-              fontSize: 14,
-              color: defaultTargetPlatform == TargetPlatform.windows
-                  ? const Color(0xFF0B173B)
-                  : _ink,
-              height: 1.6,
-            ),
-          ),
-          filledButtonTheme: FilledButtonThemeData(
-            style: FilledButton.styleFrom(
-              backgroundColor: defaultTargetPlatform == TargetPlatform.windows
-                  ? const Color(0xFF0B173B)
-                  : _accent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
-            ),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: _border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: defaultTargetPlatform == TargetPlatform.windows
-                    ? const Color(0xFF168DF4)
-                    : _accent,
-                width: 1.5,
-              ),
-            ),
-          ),
-        ),
+        theme: industrialTheme(),
         home: const TranslationHome(),
       );
 }
@@ -615,8 +548,8 @@ class _TranslationHomeState extends State<TranslationHome> {
               color: _accent,
               borderRadius: BorderRadius.circular(13),
             ),
-            child:
-                const Icon(Icons.compare_arrows_rounded, color: Colors.white),
+            child: const Icon(Icons.compare_arrows_rounded,
+                color: IndustrialPalette.accentInk),
           ),
           const SizedBox(width: 12),
           const Text(
@@ -685,10 +618,10 @@ class _TranslationHomeState extends State<TranslationHome> {
             vertical: 10,
           ),
           decoration: BoxDecoration(
-            color: active ? const Color(0xFFE4F3F0) : Colors.white,
+            color: active ? IndustrialPalette.reading : IndustrialPalette.panel,
             borderRadius: BorderRadius.circular(100),
             border: Border.all(
-              color: active ? const Color(0xFFC8E6DF) : _border,
+              color: active ? IndustrialPalette.accent : _border,
             ),
           ),
           child: Row(
@@ -744,7 +677,7 @@ class _TranslationHomeState extends State<TranslationHome> {
                 height: 355,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFAFCFB),
+                  color: IndustrialPalette.reading,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: _border),
                 ),
@@ -753,7 +686,7 @@ class _TranslationHomeState extends State<TranslationHome> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.visibility_off_outlined,
-                          size: 42, color: Color(0xFF91B7B4)),
+                          size: 42, color: IndustrialPalette.muted),
                       SizedBox(height: 14),
                       Text('原文已隐藏',
                           style: TextStyle(
@@ -769,7 +702,7 @@ class _TranslationHomeState extends State<TranslationHome> {
               Container(
                 height: 355,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFAFCFB),
+                  color: IndustrialPalette.reading,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: _border),
                 ),
@@ -792,7 +725,7 @@ class _TranslationHomeState extends State<TranslationHome> {
                             fontSize: 15, height: 1.65, color: _ink),
                         decoration: const InputDecoration(
                           hintText: '在这里粘贴英文文章…\n\n段落会被保留下来，方便后续回译练习。',
-                          hintStyle: TextStyle(color: Color(0xFF9BAAAE)),
+                          hintStyle: TextStyle(color: IndustrialPalette.faint),
                           contentPadding: EdgeInsets.all(20),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
@@ -882,7 +815,7 @@ class _TranslationHomeState extends State<TranslationHome> {
                           ? const Icon(Icons.check, size: 17, color: _accent)
                           : null,
                       onSelected: (_) => _chooseSource(source),
-                      selectedColor: const Color(0xFFE4F3F0),
+                      selectedColor: IndustrialPalette.reading,
                       side: const BorderSide(color: _border),
                       labelStyle: TextStyle(
                         color: selected ? _accent : _muted,
@@ -959,7 +892,7 @@ class _TranslationHomeState extends State<TranslationHome> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: const Color(0xFFEAF4F2),
+              color: IndustrialPalette.reading,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: _accent, size: 19),
@@ -989,7 +922,7 @@ class _TranslationHomeState extends State<TranslationHome> {
   Widget _emptyView() => Container(
         key: const ValueKey('empty'),
         decoration: BoxDecoration(
-          color: const Color(0xFFFAFCFB),
+          color: IndustrialPalette.reading,
           border: Border.all(color: _border),
           borderRadius: BorderRadius.circular(14),
         ),
@@ -998,7 +931,7 @@ class _TranslationHomeState extends State<TranslationHome> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.menu_book_outlined,
-                  size: 42, color: Color(0xFF91B7B4)),
+                  size: 42, color: IndustrialPalette.muted),
               SizedBox(height: 16),
               Text(
                 '译文将在这里出现',
@@ -1016,7 +949,7 @@ class _TranslationHomeState extends State<TranslationHome> {
         key: const ValueKey('progress'),
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFFFAFCFB),
+          color: IndustrialPalette.reading,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _border),
         ),
@@ -1024,6 +957,11 @@ class _TranslationHomeState extends State<TranslationHome> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              IndustrialStatusPill(
+                label: '/// ${_source.label} 翻译中',
+                active: true,
+              ),
+              const SizedBox(height: 20),
               const SizedBox(
                 width: 38,
                 height: 38,
@@ -1058,9 +996,9 @@ class _TranslationHomeState extends State<TranslationHome> {
         key: const ValueKey('error'),
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF8F4),
+          color: IndustrialPalette.panel,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFF3DFD2)),
+          border: Border.all(color: IndustrialPalette.error),
         ),
         child: Center(
           child: Column(
@@ -1069,7 +1007,7 @@ class _TranslationHomeState extends State<TranslationHome> {
               const Icon(
                 Icons.info_outline_rounded,
                 size: 38,
-                color: Color(0xFFBF7657),
+                color: IndustrialPalette.error,
               ),
               const SizedBox(height: 14),
               Text(_error!, textAlign: TextAlign.center),
@@ -1095,7 +1033,7 @@ class _TranslationHomeState extends State<TranslationHome> {
   Widget _translatedView() => Container(
         key: const ValueKey('translated'),
         decoration: BoxDecoration(
-          color: const Color(0xFFFAFCFB),
+          color: IndustrialPalette.reading,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _border),
         ),
@@ -1161,16 +1099,9 @@ class _CardFrame extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
+          color: IndustrialPalette.panel,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _border),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x090B3D39),
-              blurRadius: 26,
-              offset: Offset(0, 12),
-            ),
-          ],
         ),
         child: child,
       );
@@ -1256,7 +1187,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   @override
   Widget build(BuildContext context) => Dialog(
         insetPadding: const EdgeInsets.all(16),
-        backgroundColor: Colors.white,
+        backgroundColor: IndustrialPalette.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(
               defaultTargetPlatform == TargetPlatform.windows ? 20 : 28),
@@ -1276,9 +1207,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                         style: TextStyle(
                           fontSize: 21,
                           fontWeight: FontWeight.w700,
-                          color: defaultTargetPlatform == TargetPlatform.windows
-                              ? const Color(0xFF0B173B)
-                              : _ink,
+                          color: _ink,
                         ),
                       ),
                     ),
@@ -1289,40 +1218,52 @@ class _SettingsDialogState extends State<SettingsDialog> {
                     ),
                   ],
                 ),
-                if (defaultTargetPlatform != TargetPlatform.windows)
-                  const Text(
-                    '填写你自己的服务凭据；所有设置仅保存在本机。',
-                    style: TextStyle(color: _muted, fontSize: 13),
-                  ),
+                const Text(
+                  '填写你自己的服务凭据；所有设置仅保存在本机。',
+                  style: TextStyle(color: _muted, fontSize: 13),
+                ),
                 const SizedBox(height: 18),
                 Expanded(
                   child: ListView(
                     children: [
-                      _section(
+                      _settingsGroup(
+                        '01 / TRANSLATION',
                         'Google Cloud Translation',
                         '使用 Cloud Translation Basic (v2) API Key。',
+                        [_field(_google, 'API Key', secret: true)],
                       ),
-                      _field(_google, 'API Key', secret: true),
-                      const SizedBox(height: 22),
-                      _section('百度翻译', '使用百度翻译开放平台通用翻译 API。'),
-                      _field(_baiduId, 'APP ID'),
-                      const SizedBox(height: 10),
-                      _field(_baiduSecret, '密钥', secret: true),
-                      const SizedBox(height: 22),
-                      _section('AI 翻译', '使用 OpenAI Chat Completions 兼容接口。'),
-                      _field(_aiEndpoint, '接口基础地址（含 /v1）'),
-                      const SizedBox(height: 10),
-                      _field(_aiKey, 'API Key', secret: true),
-                      const SizedBox(height: 10),
-                      _field(_aiModel, '模型名称'),
-                      const SizedBox(height: 10),
-                      SwitchListTile.adaptive(
-                        contentPadding: EdgeInsets.zero,
-                        title:
-                            const Text('显示密钥', style: TextStyle(fontSize: 13)),
-                        value: _showSecrets,
-                        onChanged: (value) =>
-                            setState(() => _showSecrets = value),
+                      _settingsGroup(
+                        '02 / TRANSLATION',
+                        '百度翻译',
+                        '使用百度翻译开放平台通用翻译 API。',
+                        [
+                          _field(_baiduId, 'APP ID'),
+                          const SizedBox(height: 10),
+                          _field(_baiduSecret, '密钥', secret: true),
+                        ],
+                      ),
+                      _settingsGroup(
+                        '03 / AI REVIEW',
+                        'AI 翻译与点评',
+                        '使用 OpenAI Chat Completions 兼容接口。',
+                        [
+                          _field(_aiEndpoint, '接口基础地址（含 /v1）'),
+                          const SizedBox(height: 10),
+                          _field(_aiKey, 'API Key', secret: true),
+                          const SizedBox(height: 10),
+                          _field(_aiModel, '模型名称'),
+                          Material(
+                            color: Colors.transparent,
+                            child: SwitchListTile.adaptive(
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('显示密钥',
+                                  style: TextStyle(fontSize: 13)),
+                              value: _showSecrets,
+                              onChanged: (value) =>
+                                  setState(() => _showSecrets = value),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -1330,7 +1271,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 if (_error != null) ...[
                   const SizedBox(height: 8),
                   Text(_error!,
-                      style: const TextStyle(color: Color(0xFFB85843))),
+                      style: const TextStyle(color: IndustrialPalette.error)),
                 ],
                 const SizedBox(height: 14),
                 Row(
@@ -1356,23 +1297,38 @@ class _SettingsDialogState extends State<SettingsDialog> {
         ),
       );
 
-  Widget _section(String title, String detail) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
+  Widget _settingsGroup(
+          String tag, String title, String detail, List<Widget> fields) =>
+      Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: IndustrialPalette.panel,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: IndustrialPalette.border),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(tag,
+                style: const TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w700,
+                    color: _accent)),
+            const SizedBox(height: 8),
             Text(
               title,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: defaultTargetPlatform == TargetPlatform.windows
-                    ? const Color(0xFF0B173B)
-                    : _ink,
+                color: _ink,
               ),
             ),
             const SizedBox(height: 3),
             Text(detail, style: const TextStyle(fontSize: 12, color: _muted)),
+            const SizedBox(height: 14),
+            ...fields,
           ],
         ),
       );

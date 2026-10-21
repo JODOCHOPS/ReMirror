@@ -4,11 +4,12 @@ import 'dictionary_reader.dart';
 import 'back_translation.dart';
 import 'practice_history.dart';
 import 'translation.dart';
+import 'industrial_theme.dart';
 
-const _navy = Color(0xFF0B173B);
-const _blue = Color(0xFF168DF4);
-const _muted = Color(0xFF536484);
-const _line = Color(0xFFE2E9F3);
+const _navy = IndustrialPalette.ink;
+const _blue = IndustrialPalette.accent;
+const _muted = IndustrialPalette.muted;
+const _line = IndustrialPalette.border;
 
 class WindowsDashboard extends StatefulWidget {
   const WindowsDashboard({
@@ -132,14 +133,8 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        body: DecoratedBox(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFFE4FAFF), Color(0xFFF7FBFF), Color(0xFFDDF9FF)],
-            ),
-          ),
+        body: ColoredBox(
+          color: IndustrialPalette.background,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final wide = constraints.maxWidth >= 1080;
@@ -150,20 +145,28 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                     constraints: const BoxConstraints(maxWidth: 1380),
                     padding: EdgeInsets.all(wide ? 36 : 20),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x18005A88),
-                          blurRadius: 36,
-                          offset: Offset(0, 14),
-                        ),
-                      ],
+                      color: IndustrialPalette.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: IndustrialPalette.border),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _header(),
+                        if (widget.busy || widget.result.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: IndustrialStatusPill(
+                              label:
+                                  widget.busy ? '/// 参考译文生成中' : '/// 参考译文已就绪',
+                              active: widget.busy,
+                              icon: widget.busy
+                                  ? Icons.bolt_rounded
+                                  : Icons.check_rounded,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 26),
                         if (wide)
                           Row(
@@ -193,7 +196,8 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                           const SizedBox(height: 12),
                           Text(
                             widget.error ?? widget.historyError!,
-                            style: const TextStyle(color: Color(0xFFB04444)),
+                            style:
+                                const TextStyle(color: IndustrialPalette.error),
                           ),
                         ],
                         const SizedBox(height: 22),
@@ -214,13 +218,11 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6CC7FF), Color(0xFF087BFA)],
-              ),
-              borderRadius: BorderRadius.circular(12),
+              color: IndustrialPalette.accent,
+              borderRadius: BorderRadius.circular(9),
             ),
-            child:
-                const Icon(Icons.compare_arrows_rounded, color: Colors.white),
+            child: const Icon(Icons.compare_arrows_rounded,
+                color: IndustrialPalette.accentInk),
           ),
           const SizedBox(width: 12),
           const Text('ReMirror',
@@ -230,63 +232,53 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
           IconButton.filled(
             tooltip: '设置',
             onPressed: widget.onSettings,
-            style: IconButton.styleFrom(backgroundColor: _navy),
-            icon: const Icon(Icons.settings_rounded, color: Colors.white),
+            style:
+                IconButton.styleFrom(backgroundColor: IndustrialPalette.panel),
+            icon: const Icon(Icons.settings_rounded, color: _blue),
           ),
         ],
       );
 
   Widget _card({
-    required List<Color> colors,
     required Widget child,
     bool dark = false,
   }) =>
       Container(
-        height: 358,
+        height: 380,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: colors,
-          ),
-          borderRadius: BorderRadius.circular(19),
+          color: dark ? IndustrialPalette.reading : IndustrialPalette.panel,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: IndustrialPalette.border),
         ),
         child: DefaultTextStyle.merge(
-          style: TextStyle(color: dark ? Colors.white : _navy),
+          style: const TextStyle(color: _navy),
           child: child,
         ),
       );
 
-  Widget _cardTitle(IconData icon, String title, String subtitle,
-          {bool dark = false}) =>
-      Column(
+  Widget _cardTitle(IconData icon, String title, String subtitle) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: dark ? const Color(0xFF36528A) : Colors.white70,
-              borderRadius: BorderRadius.circular(16),
+              color: IndustrialPalette.surface,
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon,
-                size: 28, color: dark ? Colors.white : const Color(0xFF805BFF)),
+            child: Icon(icon, size: 28, color: _blue),
           ),
           const SizedBox(height: 8),
           Text(title,
               style:
                   const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
-          Text(subtitle,
-              style: TextStyle(
-                  fontSize: 12,
-                  color: dark ? const Color(0xFFD9E4FF) : _muted)),
+          Text(subtitle, style: TextStyle(fontSize: 12, color: _muted)),
         ],
       );
 
   Widget _articleCard() => _card(
-        colors: const [Color(0xFFDCD0FF), Color(0xFFEAE3FF)],
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -295,7 +287,7 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .82),
+                  color: IndustrialPalette.reading,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: widget.result.isNotEmpty
@@ -352,16 +344,13 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
           child: Text(label,
               style: const TextStyle(
-                  color: Color(0xFF6241D6),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700)),
+                  color: _blue, fontSize: 12, fontWeight: FontWeight.w700)),
         ),
       );
 
   Widget _referenceCard() {
     final paragraphs = _reference;
     return _card(
-      colors: const [Color(0xFFB7F1F3), Color(0xFFC3F8FF)],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -390,7 +379,7 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .86),
+                color: IndustrialPalette.reading,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: widget.busy
@@ -430,9 +419,7 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
               Icon(
                 paragraphs.isEmpty ? Icons.info_outline : Icons.check_circle,
                 size: 18,
-                color: paragraphs.isEmpty
-                    ? const Color(0xFF4D7793)
-                    : const Color(0xFF00B988),
+                color: paragraphs.isEmpty ? _muted : _blue,
               ),
               const SizedBox(width: 8),
               Text(paragraphs.isEmpty ? '等待生成' : '已生成',
@@ -453,18 +440,17 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
     final total = _currentSentenceCount;
     final percent = total == 0 ? 0 : (done * 100 / total).round();
     return _card(
-      colors: const [Color(0xFF172B61), Color(0xFF0B1432)],
       dark: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _cardTitle(Icons.forum_rounded, '逐句回译', '根据中文重写英文', dark: true),
+          _cardTitle(Icons.forum_rounded, '逐句回译', '根据中文重写英文'),
           const SizedBox(height: 16),
           Container(
             height: 84,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: IndustrialPalette.panel,
               borderRadius: BorderRadius.circular(13),
             ),
             child: Column(
@@ -478,8 +464,8 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                   value: total == 0 ? 0 : done / total,
                   minHeight: 7,
                   borderRadius: BorderRadius.circular(99),
-                  backgroundColor: const Color(0xFFE3E6F1),
-                  color: const Color(0xFFA787FF),
+                  backgroundColor: IndustrialPalette.border,
+                  color: _blue,
                 ),
               ],
             ),
@@ -491,10 +477,10 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: Colors.white,
+                backgroundColor: IndustrialPalette.accent,
                 child: Icon(
                   session?.submitted == true ? Icons.check : Icons.play_arrow,
-                  color: _navy,
+                  color: IndustrialPalette.accentInk,
                 ),
               ),
               const SizedBox(width: 10),
@@ -514,7 +500,7 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF273A6B),
+                  color: IndustrialPalette.panel,
                   borderRadius: BorderRadius.circular(99),
                 ),
                 child: Text('$percent%',
@@ -555,8 +541,8 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
       icon: Icon(widget.busy ? Icons.close : Icons.play_arrow_rounded),
       label: Text(actionLabel),
       style: FilledButton.styleFrom(
-        backgroundColor: _navy,
-        foregroundColor: Colors.white,
+        backgroundColor: _blue,
+        foregroundColor: IndustrialPalette.accentInk,
         minimumSize: const Size(190, 50),
       ),
     );
@@ -567,7 +553,7 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
       style: OutlinedButton.styleFrom(
         foregroundColor: _navy,
         minimumSize: const Size(170, 50),
-        side: const BorderSide(color: _navy),
+        side: const BorderSide(color: _line),
       ),
     );
     final progress = Expanded(child: _progressStrip());
@@ -596,11 +582,12 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
     final done = session?.answeredCount ?? 0;
     final ratio = total == 0 ? 0.0 : done / total;
     return Container(
-      height: 50,
+      height: 58,
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF2F6FB),
-        borderRadius: BorderRadius.circular(13),
+        color: IndustrialPalette.panel,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -627,7 +614,7 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             value: ratio,
             minHeight: 6,
             borderRadius: BorderRadius.circular(99),
-            backgroundColor: const Color(0xFFE1E6EF),
+            backgroundColor: _line,
             color: _blue,
           ),
         ],
@@ -641,8 +628,8 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: IndustrialPalette.panel,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _line),
       ),
       child: Column(
@@ -683,7 +670,7 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
   }
 
   Widget _tableHeader() => Container(
-        color: const Color(0xFFF5F8FC),
+        color: IndustrialPalette.reading,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         child: const Row(
           children: [
@@ -704,7 +691,7 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             ? '进行中'
             : '未开始';
     final statusColor = session.submitted
-        ? const Color(0xFF00A97A)
+        ? _blue
         : session.answeredCount > 0
             ? _blue
             : _muted;
@@ -805,7 +792,7 @@ class _WavePainter extends CustomPainter {
     canvas.drawCircle(
       Offset(size.width * .61, size.height * .45),
       4,
-      Paint()..color = const Color(0xFF4D9CFF),
+      Paint()..color = IndustrialPalette.accent,
     );
   }
 

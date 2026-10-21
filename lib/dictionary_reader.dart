@@ -72,7 +72,7 @@ class _DictionaryReaderState extends State<DictionaryReader> {
                 decoration: TextDecoration.underline,
                 decorationStyle: TextDecorationStyle.dotted)
             .copyWith(
-          backgroundColor: highlighted ? const Color(0xFFFFE1DB) : null,
+          backgroundColor: highlighted ? const Color(0xFF563834) : null,
         ),
       ));
       position = match.end;

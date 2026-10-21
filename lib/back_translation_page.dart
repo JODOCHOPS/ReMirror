@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'industrial_theme.dart';
 
 import 'ai_review.dart';
 import 'back_translation.dart';
@@ -8,10 +9,10 @@ import 'practice_workbook.dart';
 import 'translation.dart';
 import 'dictionary_reader.dart';
 
-const _ink = Color(0xFF1A2832);
-const _muted = Color(0xFF647780);
-const _accent = Color(0xFF187A82);
-const _border = Color(0xFFDCE6E5);
+const _ink = IndustrialPalette.ink;
+const _muted = IndustrialPalette.muted;
+const _accent = IndustrialPalette.accent;
+const _border = IndustrialPalette.border;
 
 class BackTranslationPage extends StatefulWidget {
   const BackTranslationPage({
@@ -57,9 +58,8 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
 
   bool get _canReview =>
       widget.aiCredentials?.isConfigured(TranslationSource.ai) ?? false;
-  bool get _windows => defaultTargetPlatform == TargetPlatform.windows;
-  Color get _uiAccent => _windows ? const Color(0xFF168DF4) : _accent;
-  Color get _uiBorder => _windows ? const Color(0xFFE2E9F3) : _border;
+  Color get _uiAccent => _accent;
+  Color get _uiBorder => _border;
 
   @override
   void initState() {
@@ -249,7 +249,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
     final compact = MediaQuery.sizeOf(context).width < 760;
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F8F7),
+        backgroundColor: IndustrialPalette.background,
         title: Text(_submitted ? '回译结果' : '逐句回译'),
       ),
       body: SafeArea(
@@ -342,14 +342,8 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
     final done = _answeredCount;
     final ratio = count == 0 ? 0.0 : done / count;
     return Scaffold(
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFE4FAFF), Color(0xFFF8FBFF), Color(0xFFDDF8FF)],
-          ),
-        ),
+      body: ColoredBox(
+        color: IndustrialPalette.background,
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1160),
@@ -359,11 +353,9 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                 Container(
                   padding: EdgeInsets.all(compact ? 18 : 28),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: const [
-                      BoxShadow(color: Color(0x12005A88), blurRadius: 28),
-                    ],
+                    color: IndustrialPalette.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: IndustrialPalette.border),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -379,7 +371,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                           Text(
                             _submitted ? '回译结果' : '逐句回译',
                             style: const TextStyle(
-                              color: Color(0xFF0B173B),
+                              color: IndustrialPalette.ink,
                               fontSize: 24,
                               fontWeight: FontWeight.w800,
                             ),
@@ -394,10 +386,23 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                         ],
                       ),
                       const SizedBox(height: 20),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IndustrialStatusPill(
+                          label: _submitted
+                              ? '/// 对照完成'
+                              : '/// 回译进行中 · $done / $count',
+                          active: !_submitted,
+                          icon: _submitted
+                              ? Icons.check_rounded
+                              : Icons.edit_rounded,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1F6FF),
+                          color: IndustrialPalette.panel,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Column(
@@ -407,12 +412,12 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                               children: [
                                 Text('进度  $done / $count 句',
                                     style: const TextStyle(
-                                        color: Color(0xFF0B173B),
+                                        color: IndustrialPalette.ink,
                                         fontWeight: FontWeight.w700)),
                                 const Spacer(),
                                 Text('${(ratio * 100).round()}%',
                                     style: const TextStyle(
-                                        color: Color(0xFF168DF4),
+                                        color: IndustrialPalette.accent,
                                         fontWeight: FontWeight.w800)),
                               ],
                             ),
@@ -421,8 +426,8 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                               value: ratio,
                               minHeight: 8,
                               borderRadius: BorderRadius.circular(99),
-                              color: const Color(0xFF168DF4),
-                              backgroundColor: const Color(0xFFDFE5EF),
+                              color: IndustrialPalette.accent,
+                              backgroundColor: IndustrialPalette.border,
                             ),
                           ],
                         ),
@@ -434,7 +439,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                       if (_hasUnmatched) ...[
                         const SizedBox(height: 12),
                         const Text('部分句子没有对应原文或译文，结果按段落顺序显示。',
-                            style: TextStyle(color: Color(0xFF536484))),
+                            style: TextStyle(color: IndustrialPalette.muted)),
                       ],
                       const SizedBox(height: 20),
                       for (var index = 0; index < _sentences.length; index++)
@@ -472,10 +477,10 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
     final sentence = _sentences[index];
     final answer = _answers[index];
     return Material(
-      color: Colors.white,
+      color: IndustrialPalette.panel,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFE2E9F3)),
+        side: const BorderSide(color: IndustrialPalette.border),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -488,19 +493,19 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
               Text(
                   '第 ${sentence.paragraphNumber} 段 · 第 ${sentence.sentenceNumber} 句',
                   style: const TextStyle(
-                      color: Color(0xFF168DF4),
+                      color: IndustrialPalette.accent,
                       fontSize: 12,
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 10),
               Text(sentence.reference!,
                   style: const TextStyle(
-                      color: Color(0xFF0B173B), fontSize: 16, height: 1.6)),
+                      color: IndustrialPalette.ink, fontSize: 16, height: 1.6)),
               const SizedBox(height: 10),
               Text(answer == null ? '点击填写英文回译' : '你的回译：$answer',
                   style: TextStyle(
                       color: answer == null
-                          ? const Color(0xFF168DF4)
-                          : const Color(0xFF536484),
+                          ? IndustrialPalette.accent
+                          : IndustrialPalette.muted,
                       fontSize: 13)),
             ],
           ),
@@ -509,32 +514,14 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
     );
   }
 
-  Widget _progressCard() => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        decoration: _decoration(),
-        child: Row(
-          children: [
-            Icon(
-              _submitted ? Icons.task_alt_rounded : Icons.edit_note_rounded,
-              color: _accent,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                _submitted
-                    ? '已作答 $_answeredCount / $_exerciseCount 句'
-                    : '已完成 $_answeredCount / $_exerciseCount 句',
-                style:
-                    const TextStyle(color: _ink, fontWeight: FontWeight.w700),
-              ),
-            ),
-            if (!_submitted)
-              Text(
-                '${_exerciseCount == 0 ? 0 : (_answeredCount * 100 / _exerciseCount).round()}%',
-                style: const TextStyle(
-                    color: _accent, fontWeight: FontWeight.w700),
-              ),
-          ],
+  Widget _progressCard() => Align(
+        alignment: Alignment.centerLeft,
+        child: IndustrialStatusPill(
+          label: _submitted
+              ? '/// 对照完成 · $_answeredCount / $_exerciseCount 句'
+              : '/// 回译进行中 · $_answeredCount / $_exerciseCount 句',
+          active: !_submitted,
+          icon: _submitted ? Icons.check_rounded : Icons.edit_rounded,
         ),
       );
 
@@ -581,7 +568,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
     final sentence = _sentences[index];
     final answer = _answers[index];
     return Material(
-      color: Colors.white,
+      color: IndustrialPalette.panel,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: const BorderSide(color: _border),
@@ -648,7 +635,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                 text: original ?? '无对应原文句子',
                 words: diff?.original,
                 dictionary: original != null,
-                highlight: const Color(0xFFFFE1DB),
+                highlight: const Color(0xFF563834),
               ),
               SizedBox(width: compact ? 0 : 12, height: compact ? 12 : 0),
               _comparisonPanel(
@@ -656,7 +643,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                 title: '你的回译',
                 text: sentence.reference == null ? '无对应中文句子' : answer ?? '未作答',
                 words: diff?.answer,
-                highlight: const Color(0xFFFFE9B8),
+                highlight: const Color(0xFF554A2C),
               ),
             ],
           ),
@@ -703,8 +690,8 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
           };
     final color = switch (review?.verdict) {
       AiReviewVerdict.accurate => _accent,
-      AiReviewVerdict.mostlyAccurate => const Color(0xFF966A15),
-      AiReviewVerdict.needsWork => const Color(0xFFB44A3E),
+      AiReviewVerdict.mostlyAccurate => const Color(0xFFE8BD69),
+      AiReviewVerdict.needsWork => IndustrialPalette.error,
       null => _muted,
     };
     final detail = answer == null
@@ -714,7 +701,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _windows ? const Color(0xFFF5F8FF) : const Color(0xFFF4F9F8),
+        color: IndustrialPalette.reading,
         border: Border.all(color: _uiBorder),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -744,7 +731,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _windows ? const Color(0xFFF8FAFF) : const Color(0xFFFAFCFB),
+        color: IndustrialPalette.reading,
         border: Border.all(color: _uiBorder),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -803,7 +790,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
       );
 
   BoxDecoration _decoration() => BoxDecoration(
-        color: Colors.white,
+        color: IndustrialPalette.panel,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _uiBorder),
       );
