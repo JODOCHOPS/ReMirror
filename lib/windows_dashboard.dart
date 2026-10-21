@@ -14,6 +14,7 @@ const _line = IndustrialPalette.border;
 class WindowsDashboard extends StatefulWidget {
   const WindowsDashboard({
     super.key,
+    this.hud,
     required this.original,
     required this.result,
     required this.source,
@@ -41,6 +42,7 @@ class WindowsDashboard extends StatefulWidget {
     required this.onSample,
   });
 
+  final Widget? hud;
   final TextEditingController original;
   final List<TranslatedParagraph> result;
   final TranslationSource source;
@@ -133,83 +135,73 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        body: ColoredBox(
-          color: IndustrialPalette.background,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 1080;
-              return SingleChildScrollView(
-                padding: EdgeInsets.all(wide ? 28 : 14),
-                child: Center(
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 1380),
-                    padding: EdgeInsets.all(wide ? 36 : 20),
-                    decoration: BoxDecoration(
-                      color: IndustrialPalette.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: IndustrialPalette.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _header(),
-                        if (widget.busy || widget.result.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: IndustrialStatusPill(
-                              label:
-                                  widget.busy ? '/// 参考译文生成中' : '/// 参考译文已就绪',
-                              active: widget.busy,
-                              icon: widget.busy
-                                  ? Icons.bolt_rounded
-                                  : Icons.check_rounded,
+        body: Column(children: [
+          if (widget.hud != null) widget.hud!,
+          Expanded(
+              child: ColoredBox(
+            color: IndustrialPalette.background,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 1080;
+                return SingleChildScrollView(
+                  padding: EdgeInsets.all(wide ? 28 : 14),
+                  child: Center(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 1380),
+                      padding: EdgeInsets.all(wide ? 36 : 20),
+                      decoration: BoxDecoration(
+                        color: IndustrialPalette.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: IndustrialPalette.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _header(),
+                          const SizedBox(height: 26),
+                          if (wide)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(child: _articleCard()),
+                                const SizedBox(width: 18),
+                                Expanded(child: _referenceCard()),
+                                const SizedBox(width: 18),
+                                Expanded(child: _practiceCard()),
+                              ],
+                            )
+                          else
+                            Column(
+                              children: [
+                                _articleCard(),
+                                const SizedBox(height: 16),
+                                _referenceCard(),
+                                const SizedBox(height: 16),
+                                _practiceCard(),
+                              ],
                             ),
-                          ),
+                          const SizedBox(height: 20),
+                          _actions(wide),
+                          if (widget.error != null ||
+                              widget.historyError != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              widget.error ?? widget.historyError!,
+                              style: const TextStyle(
+                                  color: IndustrialPalette.error),
+                            ),
+                          ],
+                          const SizedBox(height: 22),
+                          _history(wide),
                         ],
-                        const SizedBox(height: 26),
-                        if (wide)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: _articleCard()),
-                              const SizedBox(width: 18),
-                              Expanded(child: _referenceCard()),
-                              const SizedBox(width: 18),
-                              Expanded(child: _practiceCard()),
-                            ],
-                          )
-                        else
-                          Column(
-                            children: [
-                              _articleCard(),
-                              const SizedBox(height: 16),
-                              _referenceCard(),
-                              const SizedBox(height: 16),
-                              _practiceCard(),
-                            ],
-                          ),
-                        const SizedBox(height: 20),
-                        _actions(wide),
-                        if (widget.error != null ||
-                            widget.historyError != null) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            widget.error ?? widget.historyError!,
-                            style:
-                                const TextStyle(color: IndustrialPalette.error),
-                          ),
-                        ],
-                        const SizedBox(height: 22),
-                        _history(wide),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
-          ),
-        ),
+                );
+              },
+            ),
+          )),
+        ]),
       );
 
   Widget _header() => Row(

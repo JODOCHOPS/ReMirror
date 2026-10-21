@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +13,7 @@ import 'dictionary_reader.dart';
 import 'practice_history.dart';
 import 'windows_dashboard.dart';
 import 'industrial_theme.dart';
+import 'industrial_hud.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +24,8 @@ const _ink = IndustrialPalette.ink;
 const _muted = IndustrialPalette.muted;
 const _accent = IndustrialPalette.accent;
 const _border = IndustrialPalette.border;
+
+enum _TranslationHudMoment { translating, complete }
 
 class ReMirrorApp extends StatelessWidget {
   const ReMirrorApp({super.key});
@@ -65,6 +70,10 @@ class _TranslationHomeState extends State<TranslationHome> {
   int _job = 0;
   String? _error;
   bool _readingPreview = false;
+  _TranslationHudMoment? _hudMoment;
+  int _hudSerial = 0;
+  DateTime? _hudStartTime;
+  Timer? _hudCompletionTimer;
 
   @override
   void initState() {
@@ -161,6 +170,7 @@ class _TranslationHomeState extends State<TranslationHome> {
   @override
   void dispose() {
     _job++;
+    _hudCompletionTimer?.cancel();
     _original.dispose();
     _service.close();
     super.dispose();
@@ -191,12 +201,16 @@ class _TranslationHomeState extends State<TranslationHome> {
       if (!mounted || !_credentials.isConfigured(_source)) return;
     }
     final job = ++_job;
+    _hudCompletionTimer?.cancel();
     setState(() {
       _busy = true;
       _error = null;
       _result = const [];
       _completed = 0;
       _total = 0;
+      _hudMoment = _TranslationHudMoment.translating;
+      _hudSerial++;
+      _hudStartTime = DateTime.now();
     });
     _focusResultOnSmallScreens();
     try {
@@ -219,15 +233,42 @@ class _TranslationHomeState extends State<TranslationHome> {
           _result = result;
           _activeSessionId = null;
         });
+        _scheduleTranslationCompleteHud(job);
       }
     } on TranslationException catch (error) {
-      if (mounted && job == _job) setState(() => _error = error.message);
+      if (mounted && job == _job) {
+        setState(() {
+          _error = error.message;
+          _hudMoment = null;
+        });
+      }
     } catch (_) {
       if (mounted && job == _job) {
-        setState(() => _error = '翻译时出现意外错误，请重试。');
+        setState(() {
+          _error = '翻译时出现意外错误，请重试。';
+          _hudMoment = null;
+        });
       }
     } finally {
       if (mounted && job == _job) setState(() => _busy = false);
+    }
+  }
+
+  void _scheduleTranslationCompleteHud(int job) {
+    final elapsed = DateTime.now().difference(_hudStartTime!);
+    final remaining = const Duration(milliseconds: 2000) - elapsed;
+    void showComplete() {
+      if (!mounted || job != _job) return;
+      setState(() {
+        _hudMoment = _TranslationHudMoment.complete;
+        _hudSerial++;
+      });
+    }
+
+    if (remaining <= Duration.zero) {
+      showComplete();
+    } else {
+      _hudCompletionTimer = Timer(remaining, showComplete);
     }
   }
 
@@ -248,19 +289,23 @@ class _TranslationHomeState extends State<TranslationHome> {
 
   void _cancel() {
     _job++;
+    _hudCompletionTimer?.cancel();
     setState(() {
       _busy = false;
       _error = '已取消翻译。';
+      _hudMoment = null;
     });
   }
 
   void _chooseSource(TranslationSource source) {
     if (_busy) _cancel();
+    _hudCompletionTimer?.cancel();
     setState(() {
       _source = source;
       _result = const [];
       _activeSessionId = null;
       _error = null;
+      _hudMoment = null;
     });
   }
 
@@ -436,11 +481,14 @@ class _TranslationHomeState extends State<TranslationHome> {
   }
 
   void _newArticle() {
+    if (_busy) _cancel();
+    _hudCompletionTimer?.cancel();
     setState(() {
       _result = const [];
       _activeSessionId = null;
       _readingPreview = false;
       _error = null;
+      _hudMoment = null;
       _original.clear();
     });
   }
@@ -461,83 +509,109 @@ class _TranslationHomeState extends State<TranslationHome> {
     }
   }
 
+  Widget? _translationHud() {
+    final moment = _hudMoment;
+    if (moment == null) return null;
+    final translating = moment == _TranslationHudMoment.translating;
+    return IndustrialHud(
+      key: ValueKey(_hudSerial),
+      eyebrow: '/// RE MIRROR / TRANSLATION',
+      title: translating ? '译文生成中' : '译文已就绪',
+      detail: translating
+          ? _total == 0
+              ? '正在准备翻译'
+              : '已完成 $_completed / $_total 个片段'
+          : '参考译文已生成',
+      persistent: translating,
+    );
+  }
+
   @override
-  Widget build(BuildContext context) =>
-      defaultTargetPlatform == TargetPlatform.windows
-          ? WindowsDashboard(
-              original: _original,
-              result: _result,
-              source: _source,
-              sessions: _sessions,
-              activeSessionId: _activeSessionId,
-              busy: _busy,
-              importing: _importing,
-              loadingHistory: _loadingHistory,
-              readingPreview: _readingPreview,
-              completed: _completed,
-              total: _total,
-              error: _error,
-              historyError: _historyError,
-              onSettings: _openSettings,
-              onSourceChanged: _chooseSource,
-              onTranslate: _translate,
-              onCancel: _cancel,
-              onPractice: _startOrContinue,
-              onImport: _importPractice,
-              onOpenSession: _openSession,
-              onDeleteSession: _deleteSession,
-              onEditReference: _editReference,
-              onReadingPreviewChanged: (value) =>
-                  setState(() => _readingPreview = value),
-              onNewArticle: _newArticle,
-              onSample: _fillSample,
-            )
-          : Scaffold(
-              body: SafeArea(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final compact = constraints.maxWidth < 880;
-                    return SingleChildScrollView(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: compact ? 20 : 36,
-                        vertical: compact ? 20 : 30,
-                      ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1240),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _header(compact),
-                              SizedBox(height: compact ? 36 : 54),
-                              _intro(compact),
-                              const SizedBox(height: 28),
-                              _steps(compact),
-                              const SizedBox(height: 28),
-                              if (compact) ...[
-                                _sourceCard(),
-                                const SizedBox(height: 18),
-                                _resultCard(),
-                              ] else
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(child: _sourceCard()),
-                                    const SizedBox(width: 20),
-                                    Expanded(child: _resultCard()),
-                                  ],
-                                ),
-                              const SizedBox(height: 24),
-                              _footer(),
-                            ],
+  Widget build(BuildContext context) {
+    final hud = _translationHud();
+    return defaultTargetPlatform == TargetPlatform.windows
+        ? WindowsDashboard(
+            hud: hud,
+            original: _original,
+            result: _result,
+            source: _source,
+            sessions: _sessions,
+            activeSessionId: _activeSessionId,
+            busy: _busy,
+            importing: _importing,
+            loadingHistory: _loadingHistory,
+            readingPreview: _readingPreview,
+            completed: _completed,
+            total: _total,
+            error: _error,
+            historyError: _historyError,
+            onSettings: _openSettings,
+            onSourceChanged: _chooseSource,
+            onTranslate: _translate,
+            onCancel: _cancel,
+            onPractice: _startOrContinue,
+            onImport: _importPractice,
+            onOpenSession: _openSession,
+            onDeleteSession: _deleteSession,
+            onEditReference: _editReference,
+            onReadingPreviewChanged: (value) =>
+                setState(() => _readingPreview = value),
+            onNewArticle: _newArticle,
+            onSample: _fillSample,
+          )
+        : Scaffold(
+            body: SafeArea(
+              child: Column(
+                children: [
+                  if (hud != null) hud,
+                  Expanded(child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact = constraints.maxWidth < 880;
+                      return SingleChildScrollView(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: compact ? 20 : 36,
+                          vertical: compact ? 20 : 30,
+                        ),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1240),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _header(compact),
+                                SizedBox(height: compact ? 36 : 54),
+                                _intro(compact),
+                                const SizedBox(height: 28),
+                                _steps(compact),
+                                const SizedBox(height: 28),
+                                if (compact) ...[
+                                  _sourceCard(),
+                                  const SizedBox(height: 18),
+                                  _resultCard(),
+                                ] else
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(child: _sourceCard()),
+                                      const SizedBox(width: 20),
+                                      Expanded(child: _resultCard()),
+                                    ],
+                                  ),
+                                const SizedBox(height: 24),
+                                _footer(),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
+                      );
+                    },
+                  )),
+                ],
               ),
-            );
+            ),
+          );
+  }
 
   Widget _header(bool compact) => Row(
         children: [

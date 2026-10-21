@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'industrial_theme.dart';
+import 'industrial_hud.dart';
 
 import 'ai_review.dart';
 import 'back_translation.dart';
@@ -13,6 +14,8 @@ const _ink = IndustrialPalette.ink;
 const _muted = IndustrialPalette.muted;
 const _accent = IndustrialPalette.accent;
 const _border = IndustrialPalette.border;
+
+enum _PracticeHudMoment { enter, submitted }
 
 class BackTranslationPage extends StatefulWidget {
   const BackTranslationPage({
@@ -50,6 +53,9 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
       widget.reviewService ?? AiReviewService();
   late bool _submitted = widget.initiallySubmitted;
   bool _exporting = false;
+  late _PracticeHudMoment? _hudMoment =
+      widget.initiallySubmitted ? null : _PracticeHudMoment.enter;
+  int _hudSerial = 0;
   bool _reviewing = false;
   String? _reviewError;
   int _reviewDone = 0;
@@ -152,14 +158,32 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
       _reviewDone = 0;
       _reviewTotal = 0;
       _submitted = false;
+      _hudMoment = _PracticeHudMoment.enter;
+      _hudSerial++;
     });
     _notifyProgress();
   }
 
   void _submit() {
-    setState(() => _submitted = true);
+    setState(() {
+      _submitted = true;
+      _hudMoment = _PracticeHudMoment.submitted;
+      _hudSerial++;
+    });
     _notifyProgress();
     if (_canReview) _runReview();
+  }
+
+  Widget? _practiceHud() {
+    final moment = _hudMoment;
+    if (moment == null) return null;
+    final entering = moment == _PracticeHudMoment.enter;
+    return IndustrialHud(
+      key: ValueKey(_hudSerial),
+      eyebrow: '/// RE MIRROR / PRACTICE',
+      title: entering ? '进入回译模式' : '回译结果已生成',
+      detail: entering ? '从中文重新写出英文' : '原文与作答现已解锁',
+    );
   }
 
   Future<void> _runReview() async {
@@ -247,91 +271,97 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
       return _buildWindows(context);
     }
     final compact = MediaQuery.sizeOf(context).width < 760;
+    final hud = _practiceHud();
     return Scaffold(
       appBar: AppBar(
         backgroundColor: IndustrialPalette.background,
         title: Text(_submitted ? '回译结果' : '逐句回译'),
       ),
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1120),
-            child: ListView(
-              padding: EdgeInsets.fromLTRB(
-                compact ? 20 : 36,
-                22,
-                compact ? 20 : 36,
-                48,
-              ),
-              children: [
-                Text(
-                  _submitted ? 'STEP 02 / 回译结果' : 'STEP 02 / 逆向写作',
-                  style: const TextStyle(
-                    color: _accent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2,
+        child: Column(children: [
+          if (hud != null) hud,
+          Expanded(
+              child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1120),
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  compact ? 20 : 36,
+                  22,
+                  compact ? 20 : 36,
+                  48,
+                ),
+                children: [
+                  Text(
+                    _submitted ? 'STEP 02 / 回译结果' : 'STEP 02 / 逆向写作',
+                    style: const TextStyle(
+                      color: _accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _submitted ? '对照原文，发现差异。' : '从中文，重新写出英文。',
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                        fontSize: compact ? 28 : 36,
-                      ),
-                ),
-                const SizedBox(height: 9),
-                Text(
-                  _submitted
-                      ? '标色部分是文本差异；用词不同也可能表达相同意思。'
-                      : '点击中文句子填写回译。完成整篇后，原文和差异会一起显示。',
-                  style:
-                      const TextStyle(color: _muted, fontSize: 14, height: 1.6),
-                ),
-                const SizedBox(height: 22),
-                _progressCard(),
-                if (_submitted && _canReview) ...[
-                  const SizedBox(height: 12),
-                  _reviewStatus(),
-                ],
-                if (_hasUnmatched) ...[
-                  const SizedBox(height: 12),
-                  const Text(
-                    '部分段落的中英文句数不同，结果按各段句序尽量对应；多出的句子会单独显示。',
-                    style: TextStyle(color: _muted, fontSize: 12, height: 1.5),
+                  const SizedBox(height: 8),
+                  Text(
+                    _submitted ? '对照原文，发现差异。' : '从中文，重新写出英文。',
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                          fontSize: compact ? 28 : 36,
+                        ),
                   ),
-                ],
-                const SizedBox(height: 20),
-                for (var index = 0; index < _sentences.length; index++)
-                  if (_submitted || _sentences[index].canAnswer) ...[
+                  const SizedBox(height: 9),
+                  Text(
                     _submitted
-                        ? _resultCard(index, compact)
-                        : _exerciseCard(index),
+                        ? '标色部分是文本差异；用词不同也可能表达相同意思。'
+                        : '点击中文句子填写回译。完成整篇后，原文和差异会一起显示。',
+                    style: const TextStyle(
+                        color: _muted, fontSize: 14, height: 1.6),
+                  ),
+                  const SizedBox(height: 22),
+                  _progressCard(),
+                  if (_submitted && _canReview) ...[
                     const SizedBox(height: 12),
+                    _reviewStatus(),
                   ],
-                const SizedBox(height: 12),
-                if (_submitted) ...[
-                  FilledButton.icon(
-                    onPressed: _exporting ? null : _export,
-                    icon: const Icon(Icons.file_download_outlined),
-                    label: Text(_exporting ? '正在导出…' : '导出本轮结果 XLSX'),
-                  ),
+                  if (_hasUnmatched) ...[
+                    const SizedBox(height: 12),
+                    const Text(
+                      '部分段落的中英文句数不同，结果按各段句序尽量对应；多出的句子会单独显示。',
+                      style:
+                          TextStyle(color: _muted, fontSize: 12, height: 1.5),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  for (var index = 0; index < _sentences.length; index++)
+                    if (_submitted || _sentences[index].canAnswer) ...[
+                      _submitted
+                          ? _resultCard(index, compact)
+                          : _exerciseCard(index),
+                      const SizedBox(height: 12),
+                    ],
                   const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _restart,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('重新练习'),
-                  ),
-                ] else
-                  FilledButton.icon(
-                    onPressed: _exerciseCount == 0 ? null : _submit,
-                    icon: const Icon(Icons.fact_check_outlined),
-                    label: const Text('结束并查看结果'),
-                  ),
-              ],
+                  if (_submitted) ...[
+                    FilledButton.icon(
+                      onPressed: _exporting ? null : _export,
+                      icon: const Icon(Icons.file_download_outlined),
+                      label: Text(_exporting ? '正在导出…' : '导出本轮结果 XLSX'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _restart,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('重新练习'),
+                    ),
+                  ] else
+                    FilledButton.icon(
+                      onPressed: _exerciseCount == 0 ? null : _submit,
+                      icon: const Icon(Icons.fact_check_outlined),
+                      label: const Text('结束并查看结果'),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ),
+          )),
+        ]),
       ),
     );
   }
@@ -341,135 +371,140 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
     final count = _exerciseCount;
     final done = _answeredCount;
     final ratio = count == 0 ? 0.0 : done / count;
+    final hud = _practiceHud();
     return Scaffold(
-      body: ColoredBox(
-        color: IndustrialPalette.background,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1160),
-            child: ListView(
-              padding: EdgeInsets.all(compact ? 16 : 30),
-              children: [
-                Container(
-                  padding: EdgeInsets.all(compact ? 18 : 28),
-                  decoration: BoxDecoration(
-                    color: IndustrialPalette.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: IndustrialPalette.border),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          IconButton(
-                            tooltip: '返回首页',
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.arrow_back_rounded),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _submitted ? '回译结果' : '逐句回译',
-                            style: const TextStyle(
-                              color: IndustrialPalette.ink,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const Spacer(),
-                          if (_submitted)
-                            FilledButton.icon(
-                              onPressed: _exporting ? null : _export,
-                              icon: const Icon(Icons.file_download_outlined),
-                              label: Text(_exporting ? '导出中…' : '导出 XLSX'),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: IndustrialStatusPill(
-                          label: _submitted
-                              ? '/// 对照完成'
-                              : '/// 回译进行中 · $done / $count',
-                          active: !_submitted,
-                          icon: _submitted
-                              ? Icons.check_rounded
-                              : Icons.edit_rounded,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          color: IndustrialPalette.panel,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Column(children: [
+        if (hud != null) hud,
+        Expanded(
+            child: ColoredBox(
+          color: IndustrialPalette.background,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1160),
+              child: ListView(
+                padding: EdgeInsets.all(compact ? 16 : 30),
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(compact ? 18 : 28),
+                    decoration: BoxDecoration(
+                      color: IndustrialPalette.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: IndustrialPalette.border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                Text('进度  $done / $count 句',
-                                    style: const TextStyle(
-                                        color: IndustrialPalette.ink,
-                                        fontWeight: FontWeight.w700)),
-                                const Spacer(),
-                                Text('${(ratio * 100).round()}%',
-                                    style: const TextStyle(
-                                        color: IndustrialPalette.accent,
-                                        fontWeight: FontWeight.w800)),
-                              ],
+                            IconButton(
+                              tooltip: '返回首页',
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.arrow_back_rounded),
                             ),
-                            const SizedBox(height: 10),
-                            LinearProgressIndicator(
-                              value: ratio,
-                              minHeight: 8,
-                              borderRadius: BorderRadius.circular(99),
-                              color: IndustrialPalette.accent,
-                              backgroundColor: IndustrialPalette.border,
+                            const SizedBox(width: 8),
+                            Text(
+                              _submitted ? '回译结果' : '逐句回译',
+                              style: const TextStyle(
+                                color: IndustrialPalette.ink,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
+                            const Spacer(),
+                            if (_submitted)
+                              FilledButton.icon(
+                                onPressed: _exporting ? null : _export,
+                                icon: const Icon(Icons.file_download_outlined),
+                                label: Text(_exporting ? '导出中…' : '导出 XLSX'),
+                              ),
                           ],
                         ),
-                      ),
-                      if (_submitted && _canReview) ...[
-                        const SizedBox(height: 14),
-                        _reviewStatus(),
-                      ],
-                      if (_hasUnmatched) ...[
-                        const SizedBox(height: 12),
-                        const Text('部分句子没有对应原文或译文，结果按段落顺序显示。',
-                            style: TextStyle(color: IndustrialPalette.muted)),
-                      ],
-                      const SizedBox(height: 20),
-                      for (var index = 0; index < _sentences.length; index++)
-                        if (_submitted || _sentences[index].canAnswer) ...[
-                          _submitted
-                              ? _resultCard(index, compact)
-                              : _windowsExerciseCard(index),
-                          const SizedBox(height: 12),
-                        ],
-                      const SizedBox(height: 8),
-                      if (_submitted)
-                        OutlinedButton.icon(
-                          onPressed: _restart,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('重新练习'),
-                        )
-                      else
-                        FilledButton.icon(
-                          onPressed: count == 0 ? null : _submit,
-                          icon: const Icon(Icons.fact_check_outlined),
-                          label: const Text('结束并查看结果'),
+                        const SizedBox(height: 20),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IndustrialStatusPill(
+                            label: _submitted
+                                ? '/// 对照完成'
+                                : '/// 回译进行中 · $done / $count',
+                            active: !_submitted,
+                            icon: _submitted
+                                ? Icons.check_rounded
+                                : Icons.edit_rounded,
+                          ),
                         ),
-                    ],
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: IndustrialPalette.panel,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Text('进度  $done / $count 句',
+                                      style: const TextStyle(
+                                          color: IndustrialPalette.ink,
+                                          fontWeight: FontWeight.w700)),
+                                  const Spacer(),
+                                  Text('${(ratio * 100).round()}%',
+                                      style: const TextStyle(
+                                          color: IndustrialPalette.accent,
+                                          fontWeight: FontWeight.w800)),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              LinearProgressIndicator(
+                                value: ratio,
+                                minHeight: 8,
+                                borderRadius: BorderRadius.circular(99),
+                                color: IndustrialPalette.accent,
+                                backgroundColor: IndustrialPalette.border,
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_submitted && _canReview) ...[
+                          const SizedBox(height: 14),
+                          _reviewStatus(),
+                        ],
+                        if (_hasUnmatched) ...[
+                          const SizedBox(height: 12),
+                          const Text('部分句子没有对应原文或译文，结果按段落顺序显示。',
+                              style: TextStyle(color: IndustrialPalette.muted)),
+                        ],
+                        const SizedBox(height: 20),
+                        for (var index = 0; index < _sentences.length; index++)
+                          if (_submitted || _sentences[index].canAnswer) ...[
+                            _submitted
+                                ? _resultCard(index, compact)
+                                : _windowsExerciseCard(index),
+                            const SizedBox(height: 12),
+                          ],
+                        const SizedBox(height: 8),
+                        if (_submitted)
+                          OutlinedButton.icon(
+                            onPressed: _restart,
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('重新练习'),
+                          )
+                        else
+                          FilledButton.icon(
+                            onPressed: count == 0 ? null : _submit,
+                            icon: const Icon(Icons.fact_check_outlined),
+                            label: const Text('结束并查看结果'),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-      ),
+        )),
+      ]),
     );
   }
 
