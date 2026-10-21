@@ -30,6 +30,35 @@ void main() {
     expect(items.map((item) => item.reference), ['第一句。', null, '第三句。', '第四句。']);
   });
 
+  test(
+      'English boundaries govern aligned Chinese even when punctuation differs',
+      () {
+    const first = 'Gwendoline (1882–1951) and Margaret (1884–1963) Davies '
+        'were the granddaughters of David Davies, a Welshman who amassed a '
+        'fortune in the shipping and mining industries.';
+    const second = 'In 1907, when Gwendoline came into her inheritance '
+        '(Margaret would follow in 1909), the sisters were said to be the '
+        'wealthiest unmarried women in Britain.';
+    final items = buildPracticeSentences(const [
+      TranslatedParagraph(
+        '$first $second',
+        '格温多琳和玛格丽特是戴维斯的孙女。戴维斯靠航运和采矿致富。1907年，格温多琳继承遗产。',
+        sentenceTranslations: [
+          '格温多琳和玛格丽特是戴维斯的孙女。戴维斯靠航运和采矿致富。',
+          '1907年，格温多琳继承遗产。',
+        ],
+      ),
+    ]);
+    expect(items, hasLength(2));
+    expect(items.map((item) => item.original), [first, second]);
+    expect(items.first.reference, '格温多琳和玛格丽特是戴维斯的孙女。戴维斯靠航运和采矿致富。');
+    expect(items.last.reference, '1907年，格温多琳继承遗产。');
+    expect(splitSentences('She paid 3.5 pounds (e.g. in 1907). Then left.'), [
+      'She paid 3.5 pounds (e.g. in 1907).',
+      'Then left.',
+    ]);
+  });
+
   test('word differences mark missing and extra text', () {
     final diff = compareSentence('The cat sleeps.', 'The dog sleeps.');
     expect(diff.original.map((word) => word.matches), [true, false, true]);

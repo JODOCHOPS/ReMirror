@@ -1,4 +1,6 @@
 import 'translation.dart';
+export 'sentence_splitter.dart' show splitSentences;
+import 'sentence_splitter.dart';
 
 class PracticeSentence {
   const PracticeSentence({
@@ -16,49 +18,8 @@ class PracticeSentence {
   bool get canAnswer => reference != null;
 }
 
-/// Splits prose without discarding punctuation or closing quotation marks.
-List<String> splitSentences(String text) {
-  final value = text.trim();
-  if (value.isEmpty) return const [];
-  final result = <String>[];
-  var start = 0;
-  for (var index = 0; index < value.length; index++) {
-    final character = value[index];
-    if (!'.!?。！？'.contains(character)) continue;
-    if (character == '.' &&
-        index > 0 &&
-        index + 1 < value.length &&
-        RegExp(r'\d').hasMatch(value[index - 1]) &&
-        RegExp(r'\d').hasMatch(value[index + 1])) {
-      continue;
-    }
-    if (character == '.' && _isAbbreviation(value, index)) continue;
-    while (index + 1 < value.length &&
-        '.!?。！？”’"\'）)]'.contains(value[index + 1])) {
-      index++;
-    }
-    if (index + 1 < value.length && !RegExp(r'\s').hasMatch(value[index + 1])) {
-      // Chinese sentences often have no separating whitespace.
-      if (!'。！？'.contains(character)) continue;
-    }
-    final sentence = value.substring(start, index + 1).trim();
-    if (sentence.isNotEmpty) result.add(sentence);
-    start = index + 1;
-  }
-  final tail = value.substring(start).trim();
-  if (tail.isNotEmpty) result.add(tail);
-  return result;
-}
-
-bool _isAbbreviation(String text, int periodIndex) {
-  final prefix = text.substring(0, periodIndex + 1);
-  return RegExp(r'\b(?:Mr|Mrs|Ms|Dr|Prof|St|vs|etc)\.$', caseSensitive: false)
-          .hasMatch(prefix) ||
-      RegExp(r'(?:\b[A-Za-z]\.){1,3}$').hasMatch(prefix);
-}
-
-/// Pairs sentences in the same paragraph by position. Unmatched sentences
-/// remain visible in the final comparison instead of being silently dropped.
+/// New translations use English sentence boundaries recorded at translation
+/// time. Legacy paragraphs retain their original positional fallback.
 List<PracticeSentence> buildPracticeSentences(
   List<TranslatedParagraph> paragraphs,
 ) {
@@ -67,9 +28,14 @@ List<PracticeSentence> buildPracticeSentences(
       paragraphIndex < paragraphs.length;
       paragraphIndex++) {
     final original = splitSentences(paragraphs[paragraphIndex].original);
-    final reference = splitSentences(paragraphs[paragraphIndex].translated);
-    final count =
-        original.length > reference.length ? original.length : reference.length;
+    final aligned = paragraphs[paragraphIndex].sentenceTranslations;
+    final reference =
+        aligned ?? splitSentences(paragraphs[paragraphIndex].translated);
+    final count = aligned != null
+        ? original.length
+        : (original.length > reference.length
+            ? original.length
+            : reference.length);
     for (var index = 0; index < count; index++) {
       result.add(PracticeSentence(
         paragraphNumber: paragraphIndex + 1,

@@ -11,6 +11,7 @@ import 'practice_workbook.dart';
 import 'translation.dart';
 import 'dictionary_reader.dart';
 import 'practice_history.dart';
+import 'sentence_splitter.dart';
 import 'windows_dashboard.dart';
 import 'industrial_theme.dart';
 import 'industrial_hud.dart';
@@ -396,6 +397,66 @@ class _TranslationHomeState extends State<TranslationHome> {
   }
 
   Future<void> _editReference(int index) async {
+    final current = _result[index];
+    final aligned = current.sentenceTranslations;
+    if (aligned != null) {
+      final drafts = List<String>.of(aligned);
+      final originals = splitSentences(current.original);
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('修改第 ${index + 1} 段参考译文'),
+          content: SizedBox(
+            width: 520,
+            height: 440,
+            child: ListView.separated(
+              itemCount: drafts.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 16),
+              itemBuilder: (context, sentenceIndex) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                      '第 ${sentenceIndex + 1} 句 · ${originals[sentenceIndex]}'),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    initialValue: drafts[sentenceIndex],
+                    minLines: 2,
+                    maxLines: 5,
+                    onChanged: (value) => drafts[sentenceIndex] = value,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('保存')),
+          ],
+        ),
+      );
+      if (saved != true ||
+          !mounted ||
+          drafts.any((translation) => translation.trim().isEmpty)) {
+        return;
+      }
+      final sentences =
+          drafts.map((translation) => translation.trim()).toList();
+      setState(() {
+        final updated = List<TranslatedParagraph>.of(_result);
+        updated[index] = TranslatedParagraph(
+          current.original,
+          sentences.join(' '),
+          sentenceTranslations: sentences,
+        );
+        _result = updated;
+        _activeSessionId = null;
+      });
+      return;
+    }
     var draft = _result[index].translated;
     final edited = await showDialog<String>(
       context: context,

@@ -60,7 +60,9 @@ class PracticeSession {
           for (final paragraph in paragraphs)
             {
               'original': paragraph.original,
-              'translated': paragraph.translated
+              'translated': paragraph.translated,
+              if (paragraph.sentenceTranslations != null)
+                'sentenceTranslations': paragraph.sentenceTranslations,
             },
         ],
         'importedPractice': importedPractice?.toJson(),
@@ -80,6 +82,8 @@ class PracticeSession {
           return TranslatedParagraph(
             paragraph['original'] as String,
             paragraph['translated'] as String,
+            sentenceTranslations:
+                (paragraph['sentenceTranslations'] as List?)?.cast<String>(),
           );
         }).toList(),
         importedPractice: json['importedPractice'] == null

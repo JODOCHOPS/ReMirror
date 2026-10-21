@@ -5,6 +5,7 @@ import 'package:html_unescape/html_unescape.dart';
 import 'package:http/http.dart' as http;
 
 import 'offline_resources.dart';
+import 'sentence_splitter.dart';
 
 enum TranslationSource { google, baidu, ai, offline }
 
@@ -53,10 +54,15 @@ class TranslationCredentials {
 }
 
 class TranslatedParagraph {
-  const TranslatedParagraph(this.original, this.translated);
+  const TranslatedParagraph(this.original, this.translated,
+      {this.sentenceTranslations});
 
   final String original;
   final String translated;
+
+  /// One translation for each sentence in [original], in the same order.
+  /// Null denotes a legacy paragraph translated as a whole.
+  final List<String>? sentenceTranslations;
 }
 
 class TranslationException implements Exception {
@@ -139,29 +145,46 @@ class TranslationService {
       TranslationSource.ai => 3000,
       TranslationSource.offline => 800,
     };
-    final chunks = paragraphs
-        .map((paragraph) => splitForRequest(paragraph, limit))
+    final sentences = paragraphs.map(splitSentences).toList();
+    final chunks = sentences
+        .map((part) =>
+            part.map((sentence) => splitForRequest(sentence, limit)).toList())
         .toList();
-    final total = chunks.fold<int>(0, (count, part) => count + part.length);
+    final total = chunks.fold<int>(
+        0,
+        (count, part) =>
+            count + part.fold<int>(0, (n, pieces) => n + pieces.length));
     var completed = 0;
     final translated = <TranslatedParagraph>[];
     onProgress?.call(0, total);
 
     for (var index = 0; index < paragraphs.length; index++) {
-      final pieces = <String>[];
-      for (final chunk in chunks[index]) {
-        if (isCancelled?.call() ?? false) {
-          throw const TranslationException('已取消翻译。');
+      final sentenceTranslations = <String>[];
+      for (final sentenceChunks in chunks[index]) {
+        final pieces = <String>[];
+        for (final chunk in sentenceChunks) {
+          if (isCancelled?.call() ?? false) {
+            throw const TranslationException('已取消翻译。');
+          }
+          if (source == TranslationSource.baidu && completed > 0) {
+            // The standard Baidu tier allows one request per second.
+            await Future<void>.delayed(const Duration(milliseconds: 1100));
+          }
+          pieces.add(await translateChunk(chunk, source, credentials));
+          completed++;
+          onProgress?.call(completed, total);
         }
-        if (source == TranslationSource.baidu && completed > 0) {
-          // The standard Baidu tier allows one request per second.
-          await Future<void>.delayed(const Duration(milliseconds: 1100));
+        final translation = pieces.join('').trim();
+        if (translation.isEmpty) {
+          throw const TranslationException('翻译源返回了空译文，请重试。');
         }
-        pieces.add(await translateChunk(chunk, source, credentials));
-        completed++;
-        onProgress?.call(completed, total);
+        sentenceTranslations.add(translation);
       }
-      translated.add(TranslatedParagraph(paragraphs[index], pieces.join('')));
+      translated.add(TranslatedParagraph(
+        paragraphs[index],
+        sentenceTranslations.join(' '),
+        sentenceTranslations: sentenceTranslations,
+      ));
     }
     return translated;
   }

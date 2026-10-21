@@ -6,6 +6,29 @@ import 'package:remirror/practice_workbook.dart';
 import 'package:remirror/translation.dart';
 
 void main() {
+  test('history preserves explicit sentence alignment', () {
+    final session = PracticeSession(
+      id: 'aligned',
+      title: 'aligned',
+      source: 'Google',
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+      paragraphs: const [
+        TranslatedParagraph(
+          'First. Second.',
+          '第一句。又一句。第二句',
+          sentenceTranslations: ['第一句。又一句。', '第二句'],
+        ),
+      ],
+      answers: const {},
+      submitted: false,
+    );
+    final restored = PracticeSession.fromJson(session.toJson());
+    expect(restored.sentences, hasLength(2));
+    expect(restored.sentences.last.original, 'Second.');
+    expect(restored.sentences.last.reference, '第二句');
+  });
+
   test('practice and imported workbook survive a store reload', () async {
     final directory =
         await Directory.systemTemp.createTemp('remirror-history-');

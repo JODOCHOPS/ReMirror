@@ -89,6 +89,40 @@ void main() {
     expect(progress, ['0/2', '1/2', '2/2']);
   });
 
+  test(
+      'article sends each English sentence separately and keeps its translation',
+      () async {
+    final requests = <String>[];
+    final client = MockClient((request) async {
+      final text =
+          (jsonDecode(request.body) as Map<String, dynamic>)['q'] as String;
+      requests.add(text);
+      final translated =
+          text.startsWith('First') ? '第一部分。还有一个中文句号。' : '第二部分，没有句号';
+      return http.Response(
+        jsonEncode({
+          'data': {
+            'translations': [
+              {'translatedText': translated}
+            ]
+          }
+        }),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+    final result = await TranslationService(client: client).translateArticle(
+      english: 'First sentence (e.g. an example). Second sentence.',
+      source: TranslationSource.google,
+      credentials: const TranslationCredentials(googleApiKey: 'key'),
+    );
+    expect(requests, [
+      'First sentence (e.g. an example).',
+      'Second sentence.',
+    ]);
+    expect(result.single.sentenceTranslations, ['第一部分。还有一个中文句号。', '第二部分，没有句号']);
+  });
+
   test('Baidu request signs the exact submitted text', () async {
     final now = DateTime.fromMillisecondsSinceEpoch(1234567890000);
     final client = MockClient((request) async {
