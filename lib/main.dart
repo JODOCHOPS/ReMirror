@@ -36,6 +36,8 @@ class ReMirrorApp extends StatelessWidget {
         title: 'ReMirror',
         debugShowCheckedModeBanner: false,
         theme: industrialTheme(),
+        scrollBehavior:
+            const MaterialScrollBehavior().copyWith(scrollbars: false),
         home: const TranslationHome(),
       );
 }

@@ -11,6 +11,8 @@ const _blue = IndustrialPalette.accent;
 const _muted = IndustrialPalette.muted;
 const _line = IndustrialPalette.border;
 
+enum _DashboardSection { home, article, reference, practice }
+
 class WindowsDashboard extends StatefulWidget {
   const WindowsDashboard({
     super.key,
@@ -75,6 +77,7 @@ class WindowsDashboard extends StatefulWidget {
 
 class _WindowsDashboardState extends State<WindowsDashboard> {
   bool _showAll = false;
+  _DashboardSection _section = _DashboardSection.home;
 
   @override
   void initState() {
@@ -98,6 +101,21 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
   }
 
   void _onOriginalChanged() => setState(() {});
+
+  void _openSection(_DashboardSection section) {
+    if (section == _DashboardSection.practice) {
+      if (widget.result.isNotEmpty) {
+        widget.onPractice();
+        return;
+      }
+      final session = _current;
+      if (session != null) {
+        widget.onOpenSession(session);
+        return;
+      }
+    }
+    setState(() => _section = section);
+  }
 
   PracticeSession? get _latest =>
       widget.sessions.isEmpty ? null : widget.sessions.first;
@@ -135,77 +153,323 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        body: Column(children: [
-          if (widget.hud != null) widget.hud!,
-          Expanded(
-              child: ColoredBox(
-            color: IndustrialPalette.background,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 1080;
-                return SingleChildScrollView(
-                  padding: EdgeInsets.all(wide ? 28 : 14),
-                  child: Center(
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 1380),
-                      padding: EdgeInsets.all(wide ? 36 : 20),
-                      decoration: BoxDecoration(
-                        color: IndustrialPalette.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: IndustrialPalette.border),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _header(),
-                          const SizedBox(height: 26),
-                          if (wide)
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(child: _articleCard()),
-                                const SizedBox(width: 18),
-                                Expanded(child: _referenceCard()),
-                                const SizedBox(width: 18),
-                                Expanded(child: _practiceCard()),
-                              ],
-                            )
-                          else
-                            Column(
-                              children: [
-                                _articleCard(),
-                                const SizedBox(height: 16),
-                                _referenceCard(),
-                                const SizedBox(height: 16),
-                                _practiceCard(),
-                              ],
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact = constraints.maxWidth < 760;
+                  final inset = compact ? 16.0 : 28.0;
+                  return Padding(
+                    padding: EdgeInsets.all(inset),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1380),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _header(),
+                            const SizedBox(height: 22),
+                            Expanded(
+                              child: _section == _DashboardSection.home
+                                  ? _home(compact)
+                                  : _detail(compact),
                             ),
-                          const SizedBox(height: 20),
-                          _actions(wide),
-                          if (widget.error != null ||
-                              widget.historyError != null) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              widget.error ?? widget.historyError!,
-                              style: const TextStyle(
-                                  color: IndustrialPalette.error),
-                            ),
+                            if (widget.error != null ||
+                                widget.historyError != null) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                widget.error ?? widget.historyError!,
+                                style: const TextStyle(
+                                  color: IndustrialPalette.error,
+                                ),
+                              ),
+                            ],
                           ],
-                          const SizedBox(height: 22),
-                          _history(wide),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          )),
-        ]),
+            if (widget.hud != null)
+              Positioned(
+                top: 8,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(child: widget.hud!),
+              ),
+          ],
+        ),
       );
+
+  Widget _home(bool compact) {
+    final tiles = compact
+        ? Column(
+            children: [
+              _stepTile(_DashboardSection.article, height: 158),
+              const SizedBox(height: 10),
+              _stepTile(_DashboardSection.reference, height: 158),
+              const SizedBox(height: 10),
+              _stepTile(_DashboardSection.practice, height: 158),
+            ],
+          )
+        : Row(
+            children: [
+              Expanded(child: _stepTile(_DashboardSection.article)),
+              const SizedBox(width: 14),
+              Expanded(child: _stepTile(_DashboardSection.reference)),
+              const SizedBox(width: 14),
+              Expanded(child: _stepTile(_DashboardSection.practice)),
+            ],
+          );
+    if (compact) {
+      return ListView(
+        children: [
+          _sectionHeading(),
+          const SizedBox(height: 16),
+          tiles,
+          const SizedBox(height: 16),
+          _progressStrip(),
+          const SizedBox(height: 16),
+          _history(false),
+        ],
+      );
+    }
+    return LayoutBuilder(builder: (context, constraints) {
+      final content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _sectionHeading(),
+          const SizedBox(height: 16),
+          Expanded(flex: 3, child: tiles),
+          const SizedBox(height: 16),
+          _progressStrip(),
+          const SizedBox(height: 16),
+          Expanded(flex: 2, child: _history(true, fill: true)),
+        ],
+      );
+      if (constraints.maxHeight >= 520) return content;
+      return SingleChildScrollView(
+        child: SizedBox(height: 520, child: content),
+      );
+    });
+  }
+
+  Widget _sectionHeading() => const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '从阅读到表达',
+            style: TextStyle(
+              color: _navy,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 3),
+          Text(
+            '选择一个步骤，文章、译文和进度会自动衔接。',
+            style: TextStyle(color: _muted, fontSize: 13),
+          ),
+        ],
+      );
+
+  Widget _stepTile(_DashboardSection section, {double? height}) {
+    final title = switch (section) {
+      _DashboardSection.article => '粘贴文章',
+      _DashboardSection.reference => '参考译文',
+      _ => '逐句回译',
+    };
+    final subtitle = switch (section) {
+      _DashboardSection.article => '输入英文原文，随时编辑和查词',
+      _DashboardSection.reference => '选择翻译来源，生成和修改中文参考',
+      _ => '根据中文提示重写英文，查看进度',
+    };
+    final status = switch (section) {
+      _DashboardSection.article => widget.original.text.trim().isEmpty
+          ? '等待文章'
+          : '${splitParagraphs(widget.original.text).length} 段原文',
+      _DashboardSection.reference => widget.busy
+          ? '生成中'
+          : _reference.isEmpty
+              ? '等待生成'
+              : '${_reference.length} 段译文',
+      _ => _currentSentenceCount == 0
+          ? '等待练习'
+          : '${_current?.answeredCount ?? 0} / $_currentSentenceCount 句',
+    };
+    final icon = switch (section) {
+      _DashboardSection.article => Icons.article_outlined,
+      _DashboardSection.reference => Icons.translate_rounded,
+      _ => Icons.forum_rounded,
+    };
+    return SizedBox(
+      height: height,
+      child: Material(
+        color: IndustrialPalette.panel,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: _line),
+        ),
+        child: InkWell(
+          key: ValueKey('open-${section.name}'),
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openSection(section),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, color: _blue, size: 25),
+                    const Spacer(),
+                    const Icon(
+                      Icons.arrow_outward_rounded,
+                      color: _muted,
+                      size: 18,
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: _navy,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _muted, fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  status,
+                  style: const TextStyle(
+                    color: _blue,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detail(bool compact) => LayoutBuilder(
+        builder: (context, constraints) {
+          final content = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                  switch (_section) {
+                    _DashboardSection.article => '01 / 粘贴文章',
+                    _DashboardSection.reference => '02 / 参考译文',
+                    _ => '03 / 逐句回译',
+                  },
+                  style: const TextStyle(color: _muted, fontSize: 12)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: switch (_section) {
+                  _DashboardSection.article => _articleCard(),
+                  _DashboardSection.reference => _referenceCard(),
+                  _ => _practiceCard(),
+                },
+              ),
+              const SizedBox(height: 14),
+              _detailActions(compact),
+            ],
+          );
+          final minimumHeight = compact ? 550.0 : 480.0;
+          if (constraints.maxHeight >= minimumHeight) return content;
+          return SingleChildScrollView(
+            child: SizedBox(height: minimumHeight, child: content),
+          );
+        },
+      );
+
+  Widget _detailActions(bool compact) {
+    final action = switch (_section) {
+      _DashboardSection.article => FilledButton.icon(
+          onPressed: widget.original.text.trim().isEmpty
+              ? null
+              : () => setState(() => _section = _DashboardSection.reference),
+          icon: const Icon(Icons.arrow_forward_rounded),
+          label: const Text('查看参考译文'),
+        ),
+      _DashboardSection.reference => FilledButton.icon(
+          onPressed: widget.busy
+              ? widget.onCancel
+              : widget.original.text.trim().isEmpty
+                  ? null
+                  : widget.onTranslate,
+          icon: Icon(widget.busy ? Icons.close_rounded : Icons.auto_awesome),
+          label: Text(widget.busy ? '取消翻译' : '生成参考译文'),
+        ),
+      _ => FilledButton.icon(
+          onPressed: widget.result.isNotEmpty
+              ? widget.onPractice
+              : _current == null
+                  ? null
+                  : () => widget.onOpenSession(_current!),
+          icon: const Icon(Icons.arrow_forward_rounded),
+          label: Text(
+            _current?.submitted == true && widget.result.isEmpty
+                ? '查看练习结果'
+                : '进入逐句回译',
+          ),
+        ),
+    };
+    final secondary = switch (_section) {
+      _DashboardSection.article => OutlinedButton.icon(
+          onPressed: widget.busy || widget.importing ? null : widget.onImport,
+          icon: const Icon(Icons.file_upload_outlined),
+          label: Text(widget.importing ? '导入中…' : '导入 XLSX'),
+        ),
+      _DashboardSection.reference => OutlinedButton.icon(
+          onPressed: widget.result.isEmpty
+              ? null
+              : () => _openSection(_DashboardSection.practice),
+          icon: const Icon(Icons.arrow_forward_rounded),
+          label: const Text('查看逐句回译'),
+        ),
+      _ => OutlinedButton.icon(
+          onPressed: () =>
+              setState(() => _section = _DashboardSection.reference),
+          icon: const Icon(Icons.translate_rounded),
+          label: const Text('查看参考译文'),
+        ),
+    };
+    return compact
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [action, const SizedBox(height: 10), secondary],
+          )
+        : Row(children: [action, const SizedBox(width: 12), secondary]);
+  }
 
   Widget _header() => Row(
         children: [
+          if (_section != _DashboardSection.home) ...[
+            IconButton(
+              key: const ValueKey('back-to-dashboard'),
+              tooltip: '返回工作台',
+              onPressed: () =>
+                  setState(() => _section = _DashboardSection.home),
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+            const SizedBox(width: 8),
+          ],
           Container(
             width: 42,
             height: 42,
@@ -213,13 +477,20 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
               color: IndustrialPalette.accent,
               borderRadius: BorderRadius.circular(9),
             ),
-            child: const Icon(Icons.compare_arrows_rounded,
-                color: IndustrialPalette.accentInk),
+            child: const Icon(
+              Icons.compare_arrows_rounded,
+              color: IndustrialPalette.accentInk,
+            ),
           ),
           const SizedBox(width: 12),
-          const Text('ReMirror',
-              style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.w800, color: _navy)),
+          const Text(
+            'ReMirror',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: _navy,
+            ),
+          ),
           const Spacer(),
           IconButton.filled(
             tooltip: '设置',
@@ -231,12 +502,8 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
         ],
       );
 
-  Widget _card({
-    required Widget child,
-    bool dark = false,
-  }) =>
-      Container(
-        height: 380,
+  Widget _card({required Widget child, bool dark = false}) => Container(
+        width: double.infinity,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: dark ? IndustrialPalette.reading : IndustrialPalette.panel,
@@ -262,9 +529,10 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             child: Icon(icon, size: 28, color: _blue),
           ),
           const SizedBox(height: 8),
-          Text(title,
-              style:
-                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 2),
           Text(subtitle, style: TextStyle(fontSize: 12, color: _muted)),
         ],
@@ -308,11 +576,15 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             const SizedBox(height: 10),
             Row(
               children: [
-                Text('${widget.original.text.runes.length} 字符',
-                    style: const TextStyle(fontSize: 12)),
+                Text(
+                  '${widget.original.text.runes.length} 字符',
+                  style: const TextStyle(fontSize: 12),
+                ),
                 const SizedBox(width: 16),
-                Text('${splitParagraphs(widget.original.text).length} 段',
-                    style: const TextStyle(fontSize: 12)),
+                Text(
+                  '${splitParagraphs(widget.original.text).length} 段',
+                  style: const TextStyle(fontSize: 12),
+                ),
                 const Spacer(),
                 if (widget.result.isNotEmpty)
                   _smallAction('新文章', widget.onNewArticle)
@@ -334,9 +606,14 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-          child: Text(label,
-              style: const TextStyle(
-                  color: _blue, fontSize: 12, fontWeight: FontWeight.w700)),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: _blue,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ),
       );
 
@@ -380,9 +657,11 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                       children: [
                         const CircularProgressIndicator(),
                         const SizedBox(height: 12),
-                        Text(widget.total == 0
-                            ? '正在准备…'
-                            : '翻译中 ${widget.completed} / ${widget.total}'),
+                        Text(
+                          widget.total == 0
+                              ? '正在准备…'
+                              : '翻译中 ${widget.completed} / ${widget.total}',
+                        ),
                       ],
                     )
                   : paragraphs.isEmpty
@@ -414,8 +693,10 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                 color: paragraphs.isEmpty ? _muted : _blue,
               ),
               const SizedBox(width: 8),
-              Text(paragraphs.isEmpty ? '等待生成' : '已生成',
-                  style: const TextStyle(fontSize: 12)),
+              Text(
+                paragraphs.isEmpty ? '等待生成' : '已生成',
+                style: const TextStyle(fontSize: 12),
+              ),
               const Spacer(),
               if (widget.result.isNotEmpty)
                 _smallAction('修改译文', () => widget.onEditReference(0)),
@@ -448,9 +729,10 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('英文  →  中文  →  英文',
-                    style:
-                        TextStyle(color: _navy, fontWeight: FontWeight.w700)),
+                const Text(
+                  '英文  →  中文  →  英文',
+                  style: TextStyle(color: _navy, fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 12),
                 LinearProgressIndicator(
                   value: total == 0 ? 0 : done / total,
@@ -464,7 +746,9 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
           ),
           const SizedBox(height: 14),
           const SizedBox(
-              height: 48, child: CustomPaint(painter: _WavePainter())),
+            height: 48,
+            child: CustomPaint(painter: _WavePainter()),
+          ),
           const Spacer(),
           Row(
             children: [
@@ -489,82 +773,23 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
+                ),
                 decoration: BoxDecoration(
                   color: IndustrialPalette.panel,
                   borderRadius: BorderRadius.circular(99),
                 ),
-                child: Text('$percent%',
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                child: Text(
+                  '$percent%',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
             ],
           ),
         ],
       ),
-    );
-  }
-
-  Widget _actions(bool wide) {
-    final session = _current;
-    final canContinue = session != null && !session.submitted;
-    final actionLabel = widget.busy
-        ? '取消翻译'
-        : widget.result.isNotEmpty
-            ? '开始练习'
-            : widget.original.text.trim().isNotEmpty
-                ? '生成参考译文'
-                : canContinue
-                    ? '继续练习'
-                    : '开始练习';
-    final enabled = widget.busy ||
-        widget.result.isNotEmpty ||
-        widget.original.text.trim().isNotEmpty ||
-        canContinue;
-    final primary = FilledButton.icon(
-      onPressed: !enabled
-          ? null
-          : widget.busy
-              ? widget.onCancel
-              : widget.result.isNotEmpty ||
-                      canContinue && widget.original.text.trim().isEmpty
-                  ? widget.onPractice
-                  : widget.onTranslate,
-      icon: Icon(widget.busy ? Icons.close : Icons.play_arrow_rounded),
-      label: Text(actionLabel),
-      style: FilledButton.styleFrom(
-        backgroundColor: _blue,
-        foregroundColor: IndustrialPalette.accentInk,
-        minimumSize: const Size(190, 50),
-      ),
-    );
-    final import = OutlinedButton.icon(
-      onPressed: widget.busy || widget.importing ? null : widget.onImport,
-      icon: const Icon(Icons.file_upload_outlined),
-      label: Text(widget.importing ? '导入中…' : '导入 XLSX'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: _navy,
-        minimumSize: const Size(170, 50),
-        side: const BorderSide(color: _line),
-      ),
-    );
-    final progress = Expanded(child: _progressStrip());
-    if (wide) {
-      return Row(children: [
-        primary,
-        const SizedBox(width: 12),
-        import,
-        const SizedBox(width: 16),
-        progress
-      ]);
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Wrap(spacing: 12, runSpacing: 10, children: [primary, import]),
-        const SizedBox(height: 12),
-        _progressStrip(),
-      ],
     );
   }
 
@@ -592,13 +817,22 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                   style: const TextStyle(fontSize: 11, color: _muted),
                 ),
               ),
-              Text('$done / $total',
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w700)),
+              Text(
+                '$done / $total',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(width: 15),
-              Text('${(ratio * 100).round()}%',
-                  style: const TextStyle(
-                      color: _blue, fontSize: 15, fontWeight: FontWeight.w800)),
+              Text(
+                '${(ratio * 100).round()}%',
+                style: const TextStyle(
+                  color: _blue,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 5),
@@ -614,7 +848,7 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
     );
   }
 
-  Widget _history(bool wide) {
+  Widget _history(bool wide, {bool fill = false}) {
     final sessions =
         _showAll ? widget.sessions : widget.sessions.take(4).toList();
     return Container(
@@ -631,9 +865,14 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             children: [
               const Icon(Icons.history_rounded, color: _blue),
               const SizedBox(width: 9),
-              const Text('最近练习',
-                  style: TextStyle(
-                      color: _navy, fontSize: 18, fontWeight: FontWeight.w800)),
+              const Text(
+                '最近练习',
+                style: TextStyle(
+                  color: _navy,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               const Spacer(),
               if (widget.sessions.length > 4)
                 OutlinedButton(
@@ -643,22 +882,32 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             ],
           ),
           const SizedBox(height: 14),
-          if (widget.loadingHistory)
-            const Center(child: CircularProgressIndicator())
-          else if (sessions.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text('还没有练习记录', style: TextStyle(color: _muted)),
-              ),
-            )
-          else ...[
-            if (wide) _tableHeader(),
-            for (final session in sessions) _historyRow(session, wide),
-          ],
+          if (fill)
+            Expanded(child: _historyContent(sessions, wide))
+          else
+            _historyContent(sessions, wide),
         ],
       ),
     );
+  }
+
+  Widget _historyContent(List<PracticeSession> sessions, bool wide) {
+    if (widget.loadingHistory) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (sessions.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Text('还没有练习记录', style: TextStyle(color: _muted)),
+        ),
+      );
+    }
+    final rows = <Widget>[
+      if (wide) _tableHeader(),
+      for (final session in sessions) _historyRow(session, wide),
+    ];
+    return wide ? ListView(children: rows) : Column(children: rows);
   }
 
   Widget _tableHeader() => Container(
@@ -702,9 +951,11 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                 children: [
                   Expanded(
                     flex: 4,
-                    child: Text(session.title,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                    child: Text(
+                      session.title,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                   Expanded(flex: 2, child: Text(dateLabel)),
                   Expanded(flex: 2, child: Text(session.source)),
@@ -722,15 +973,16 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(session.title,
-                            overflow: TextOverflow.ellipsis,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w700)),
+                        Text(
+                          session.title,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
                         const SizedBox(height: 4),
                         Text(
-                            '$dateLabel · ${session.source} · ${session.sentenceCount} 句',
-                            style:
-                                const TextStyle(fontSize: 11, color: _muted)),
+                          '$dateLabel · ${session.source} · ${session.sentenceCount} 句',
+                          style: const TextStyle(fontSize: 11, color: _muted),
+                        ),
                       ],
                     ),
                   ),
@@ -766,14 +1018,38 @@ class _WavePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final path = Path()
       ..moveTo(0, size.height * .55)
-      ..cubicTo(size.width * .08, -8, size.width * .17, size.height + 8,
-          size.width * .26, size.height * .55)
-      ..cubicTo(size.width * .34, -8, size.width * .40, size.height + 8,
-          size.width * .50, size.height * .55)
-      ..cubicTo(size.width * .59, size.height * .95, size.width * .63, -5,
-          size.width * .72, size.height * .48)
-      ..cubicTo(size.width * .82, size.height + 5, size.width * .88, 0,
-          size.width, size.height * .65);
+      ..cubicTo(
+        size.width * .08,
+        -8,
+        size.width * .17,
+        size.height + 8,
+        size.width * .26,
+        size.height * .55,
+      )
+      ..cubicTo(
+        size.width * .34,
+        -8,
+        size.width * .40,
+        size.height + 8,
+        size.width * .50,
+        size.height * .55,
+      )
+      ..cubicTo(
+        size.width * .59,
+        size.height * .95,
+        size.width * .63,
+        -5,
+        size.width * .72,
+        size.height * .48,
+      )
+      ..cubicTo(
+        size.width * .82,
+        size.height + 5,
+        size.width * .88,
+        0,
+        size.width,
+        size.height * .65,
+      );
     canvas.drawPath(
       path,
       Paint()
