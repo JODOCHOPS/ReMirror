@@ -13,7 +13,8 @@ void main() {
     const Size(390, 844),
     const Size(390, 600),
   ]) {
-    testWidgets('dashboard sections fit ${size.width.toInt()} x ${size.height.toInt()}',
+    testWidgets(
+        'dashboard sections fit ${size.width.toInt()} x ${size.height.toInt()}',
         (tester) async {
       await tester.binding.setSurfaceSize(size);
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -142,6 +143,55 @@ void main() {
     expect(tester.getTopLeft(find.text('从阅读到表达')), before);
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(find.text('从阅读到表达')), before);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reduced motion switches sections without an outgoing panel',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final original = TextEditingController();
+    addTearDown(original.dispose);
+
+    await tester.pumpWidget(MaterialApp(
+      theme: industrialTheme(),
+      home: MediaQuery(
+        data: const MediaQueryData(disableAnimations: true),
+        child: WindowsDashboard(
+          original: original,
+          result: const [],
+          source: TranslationSource.offline,
+          sessions: const [],
+          activeSessionId: null,
+          busy: false,
+          importing: false,
+          loadingHistory: false,
+          readingPreview: false,
+          completed: 0,
+          total: 0,
+          error: null,
+          historyError: null,
+          onSettings: () {},
+          onSourceChanged: (_) {},
+          onTranslate: () {},
+          onCancel: () {},
+          onPractice: () {},
+          onImport: () {},
+          onImportArticle: () {},
+          onOpenSession: (_) {},
+          onDeleteSession: (_) {},
+          onEditReference: (_) {},
+          onReadingPreviewChanged: (_) {},
+          onNewArticle: () {},
+          onSample: () {},
+        ),
+      ),
+    ));
+
+    await tester.tap(find.byKey(const ValueKey('open-article')));
+    await tester.pump();
+    expect(find.text('从阅读到表达'), findsNothing);
+    expect(find.text('01 / 输入文章'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

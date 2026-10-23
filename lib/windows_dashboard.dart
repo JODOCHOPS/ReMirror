@@ -80,6 +80,17 @@ class WindowsDashboard extends StatefulWidget {
 class _WindowsDashboardState extends State<WindowsDashboard> {
   bool _showAll = false;
   _DashboardSection _section = _DashboardSection.home;
+  _DashboardSection? _hoveredStep;
+  _DashboardSection? _focusedStep;
+
+  bool get _reduceMotion =>
+      MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+  Duration get _sectionDuration =>
+      _reduceMotion ? Duration.zero : const Duration(milliseconds: 260);
+
+  Duration get _feedbackDuration =>
+      _reduceMotion ? Duration.zero : const Duration(milliseconds: 160);
 
   @override
   void initState() {
@@ -116,7 +127,11 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
         return;
       }
     }
-    setState(() => _section = section);
+    setState(() {
+      _hoveredStep = null;
+      _focusedStep = null;
+      _section = section;
+    });
   }
 
   PracticeSession? get _latest =>
@@ -173,9 +188,31 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                             _header(),
                             const SizedBox(height: 22),
                             Expanded(
-                              child: _section == _DashboardSection.home
-                                  ? _home(compact)
-                                  : _detail(compact),
+                              child: AnimatedSwitcher(
+                                duration: _sectionDuration,
+                                reverseDuration: _feedbackDuration,
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                transitionBuilder: (child, animation) =>
+                                    FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: _reduceMotion
+                                          ? Offset.zero
+                                          : const Offset(0, 0.018),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
+                                ),
+                                child: KeyedSubtree(
+                                  key: ValueKey(_section),
+                                  child: _section == _DashboardSection.home
+                                      ? _home(compact)
+                                      : _detail(compact),
+                                ),
+                              ),
                             ),
                             if (widget.error != null ||
                                 widget.historyError != null) ...[
@@ -307,60 +344,90 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
       _DashboardSection.reference => Icons.translate_rounded,
       _ => Icons.forum_rounded,
     };
+    final highlighted = _hoveredStep == section || _focusedStep == section;
     return SizedBox(
       height: height,
-      child: Material(
-        color: IndustrialPalette.panel,
-        shape: RoundedRectangleBorder(
+      child: AnimatedContainer(
+        duration: _feedbackDuration,
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color:
+              highlighted ? IndustrialPalette.reading : IndustrialPalette.panel,
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: _line),
+          border: Border.all(color: highlighted ? _blue : _line),
         ),
-        child: InkWell(
-          key: ValueKey('open-${section.name}'),
+        child: Material(
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(16),
-          onTap: () => _openSection(section),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(icon, color: _blue, size: 25),
-                    const Spacer(),
-                    const Icon(
-                      Icons.arrow_outward_rounded,
-                      color: _muted,
-                      size: 18,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: ValueKey('open-${section.name}'),
+            borderRadius: BorderRadius.circular(16),
+            onHover: (hovered) => setState(() {
+              if (hovered) {
+                _hoveredStep = section;
+              } else if (_hoveredStep == section) {
+                _hoveredStep = null;
+              }
+            }),
+            onFocusChange: (focused) => setState(() {
+              if (focused) {
+                _focusedStep = section;
+              } else if (_focusedStep == section) {
+                _focusedStep = null;
+              }
+            }),
+            onTap: () => _openSection(section),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(icon, color: _blue, size: 25),
+                      const Spacer(),
+                      AnimatedSlide(
+                        duration: _feedbackDuration,
+                        curve: Curves.easeOutCubic,
+                        offset: highlighted && !_reduceMotion
+                            ? const Offset(0.16, -0.16)
+                            : Offset.zero,
+                        child: Icon(
+                          Icons.arrow_outward_rounded,
+                          color: highlighted ? _blue : _muted,
+                          size: 18,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: _navy,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
                     ),
-                  ],
-                ),
-                const Spacer(),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: _navy,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _muted, fontSize: 12),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  status,
-                  style: const TextStyle(
-                    color: _blue,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: _muted, fontSize: 12),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  Text(
+                    status,
+                    style: const TextStyle(
+                      color: _blue,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -675,37 +742,56 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                 color: IndustrialPalette.reading,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: widget.busy
-                  ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const CircularProgressIndicator(),
-                        const SizedBox(height: 12),
-                        Text(
-                          widget.total == 0
-                              ? '正在准备…'
-                              : '翻译中 ${widget.completed} / ${widget.total}',
-                        ),
-                      ],
-                    )
-                  : paragraphs.isEmpty
-                      ? const Center(child: Text('译文将在这里显示'))
-                      : ListView.separated(
-                          itemCount: paragraphs.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (context, index) => InkWell(
-                            onTap: widget.result.isEmpty
-                                ? null
-                                : () => widget.onEditReference(index),
-                            child: Text(
-                              paragraphs[index].translated,
-                              maxLines: 5,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 13, height: 1.5),
+              child: AnimatedSwitcher(
+                duration: _reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOutCubic,
+                layoutBuilder: (currentChild, previousChildren) => Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ...previousChildren,
+                    if (currentChild != null) currentChild,
+                  ],
+                ),
+                child: widget.busy
+                    ? Column(
+                        key: const ValueKey('reference-loading'),
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const CircularProgressIndicator(),
+                          const SizedBox(height: 12),
+                          Text(
+                            widget.total == 0
+                                ? '正在准备…'
+                                : '翻译中 ${widget.completed} / ${widget.total}',
+                          ),
+                        ],
+                      )
+                    : paragraphs.isEmpty
+                        ? const Center(
+                            key: ValueKey('reference-empty'),
+                            child: Text('译文将在这里显示'),
+                          )
+                        : ListView.separated(
+                            key: const ValueKey('reference-ready'),
+                            itemCount: paragraphs.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (context, index) => InkWell(
+                              onTap: widget.result.isEmpty
+                                  ? null
+                                  : () => widget.onEditReference(index),
+                              child: Text(
+                                paragraphs[index].translated,
+                                maxLines: 5,
+                                overflow: TextOverflow.ellipsis,
+                                style:
+                                    const TextStyle(fontSize: 13, height: 1.5),
+                              ),
                             ),
                           ),
-                        ),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -758,12 +844,9 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                   style: TextStyle(color: _navy, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 12),
-                LinearProgressIndicator(
+                _animatedProgress(
                   value: total == 0 ? 0 : done / total,
-                  minHeight: 7,
-                  borderRadius: BorderRadius.circular(99),
-                  backgroundColor: IndustrialPalette.border,
-                  color: _blue,
+                  height: 7,
                 ),
               ],
             ),
@@ -860,17 +943,26 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             ],
           ),
           const SizedBox(height: 5),
-          LinearProgressIndicator(
-            value: ratio,
-            minHeight: 6,
-            borderRadius: BorderRadius.circular(99),
-            backgroundColor: _line,
-            color: _blue,
-          ),
+          _animatedProgress(value: ratio, height: 6),
         ],
       ),
     );
   }
+
+  Widget _animatedProgress({required double value, required double height}) =>
+      TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: value.clamp(0.0, 1.0)),
+        duration:
+            _reduceMotion ? Duration.zero : const Duration(milliseconds: 340),
+        curve: Curves.easeOutCubic,
+        builder: (context, progress, _) => LinearProgressIndicator(
+          value: progress,
+          minHeight: height,
+          borderRadius: BorderRadius.circular(99),
+          backgroundColor: _line,
+          color: _blue,
+        ),
+      );
 
   Widget _history(bool wide, {bool fill = false}) {
     final sessions =
