@@ -392,7 +392,6 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
     final count = _exerciseCount;
     final done = _answeredCount;
     final ratio = count == 0 ? 0.0 : done / count;
-    final hud = _practiceHud();
     return Scaffold(
       body: Stack(children: [
         Positioned.fill(child: ColoredBox(
@@ -523,13 +522,6 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
             ),
           ),
         )),
-        if (hud != null)
-          Positioned(
-            top: 8,
-            left: 0,
-            right: 0,
-            child: IgnorePointer(child: hud),
-          ),
       ]),
     );
   }

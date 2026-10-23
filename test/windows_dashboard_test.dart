@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:remirror/industrial_hud.dart';
 import 'package:remirror/industrial_theme.dart';
 import 'package:remirror/windows_dashboard.dart';
 import 'package:remirror/translation.dart';
@@ -23,11 +22,9 @@ void main() {
       var translated = false;
       var practiced = 0;
 
-      Widget app({List<TranslatedParagraph> result = const [], Widget? hud}) =>
-          MaterialApp(
+      Widget app({List<TranslatedParagraph> result = const []}) => MaterialApp(
             theme: industrialTheme(),
             home: WindowsDashboard(
-              hud: hud,
               original: original,
               result: result,
               source: TranslationSource.offline,
@@ -94,57 +91,6 @@ void main() {
       expect(practiced, 2);
     });
   }
-
-  testWidgets('translation HUD does not move dashboard content',
-      (tester) async {
-    await tester.binding.setSurfaceSize(const Size(1280, 720));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final original = TextEditingController();
-    addTearDown(original.dispose);
-
-    await tester.pumpWidget(MaterialApp(
-      theme: industrialTheme(),
-      home: WindowsDashboard(
-        hud: const IndustrialHud(
-          eyebrow: '/// RE MIRROR / TRANSLATION',
-          title: '译文已就绪',
-          detail: '参考译文已生成',
-        ),
-        original: original,
-        result: const [],
-        source: TranslationSource.offline,
-        sessions: const [],
-        activeSessionId: null,
-        busy: false,
-        importing: false,
-        loadingHistory: false,
-        readingPreview: false,
-        completed: 0,
-        total: 0,
-        error: null,
-        historyError: null,
-        onSettings: () {},
-        onSourceChanged: (_) {},
-        onTranslate: () {},
-        onCancel: () {},
-        onPractice: () {},
-        onImport: () {},
-        onImportArticle: () {},
-        onOpenSession: (_) {},
-        onDeleteSession: (_) {},
-        onEditReference: (_) {},
-        onReadingPreviewChanged: (_) {},
-        onNewArticle: () {},
-        onSample: () {},
-      ),
-    ));
-    final before = tester.getTopLeft(find.text('从阅读到表达'));
-    await tester.pump(const Duration(milliseconds: 800));
-    expect(tester.getTopLeft(find.text('从阅读到表达')), before);
-    await tester.pumpAndSettle();
-    expect(tester.getTopLeft(find.text('从阅读到表达')), before);
-    expect(tester.takeException(), isNull);
-  });
 
   testWidgets('reduced motion switches sections without an outgoing panel',
       (tester) async {

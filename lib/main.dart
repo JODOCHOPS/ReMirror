@@ -658,10 +658,10 @@ class _TranslationHomeState extends State<TranslationHome> {
 
   @override
   Widget build(BuildContext context) {
-    final hud = _translationHud();
-    return defaultTargetPlatform == TargetPlatform.windows
+    final windows = defaultTargetPlatform == TargetPlatform.windows;
+    final hud = windows ? null : _translationHud();
+    return windows
         ? WindowsDashboard(
-            hud: hud,
             original: _original,
             result: _result,
             source: _source,

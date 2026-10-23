@@ -2,12 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remirror/back_translation_page.dart';
+import 'package:remirror/industrial_hud.dart';
 import 'package:remirror/translation.dart';
 
 void main() {
   testWidgets('Windows practice resumes answers and submits progress',
       (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     await tester.binding.setSurfaceSize(const Size(900, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     Map<int, String>? savedAnswers;
@@ -26,8 +28,10 @@ void main() {
 
     expect(find.text('进度  1 / 1 句'), findsOneWidget);
     expect(find.text('你的回译：Hello world.'), findsOneWidget);
+    expect(find.byType(IndustrialHud), findsNothing);
     await tester.tap(find.text('结束并查看结果'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    expect(find.byType(IndustrialHud), findsNothing);
     expect(find.text('回译结果'), findsOneWidget);
     expect(savedAnswers?[0], 'Hello world.');
     expect(savedSubmitted, isTrue);

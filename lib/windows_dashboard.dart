@@ -16,7 +16,6 @@ enum _DashboardSection { home, article, reference, practice }
 class WindowsDashboard extends StatefulWidget {
   const WindowsDashboard({
     super.key,
-    this.hud,
     required this.original,
     required this.result,
     required this.source,
@@ -45,7 +44,6 @@ class WindowsDashboard extends StatefulWidget {
     required this.onSample,
   });
 
-  final Widget? hud;
   final TextEditingController original;
   final List<TranslatedParagraph> result;
   final TranslationSource source;
@@ -232,13 +230,6 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
                 },
               ),
             ),
-            if (widget.hud != null)
-              Positioned(
-                top: 8,
-                left: 0,
-                right: 0,
-                child: IgnorePointer(child: widget.hud!),
-              ),
           ],
         ),
       );
