@@ -36,6 +36,7 @@ class WindowsDashboard extends StatefulWidget {
     required this.onCancel,
     required this.onPractice,
     required this.onImport,
+    required this.onImportArticle,
     required this.onOpenSession,
     required this.onDeleteSession,
     required this.onEditReference,
@@ -64,6 +65,7 @@ class WindowsDashboard extends StatefulWidget {
   final VoidCallback onCancel;
   final VoidCallback onPractice;
   final VoidCallback onImport;
+  final VoidCallback onImportArticle;
   final ValueChanged<PracticeSession> onOpenSession;
   final ValueChanged<PracticeSession> onDeleteSession;
   final ValueChanged<int> onEditReference;
@@ -278,12 +280,12 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
 
   Widget _stepTile(_DashboardSection section, {double? height}) {
     final title = switch (section) {
-      _DashboardSection.article => '粘贴文章',
+      _DashboardSection.article => '输入文章',
       _DashboardSection.reference => '参考译文',
       _ => '逐句回译',
     };
     final subtitle = switch (section) {
-      _DashboardSection.article => '输入英文原文，随时编辑和查词',
+      _DashboardSection.article => '粘贴或导入英文原文，随时编辑和查词',
       _DashboardSection.reference => '选择翻译来源，生成和修改中文参考',
       _ => '根据中文提示重写英文，查看进度',
     };
@@ -373,7 +375,7 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
             children: [
               Text(
                   switch (_section) {
-                    _DashboardSection.article => '01 / 粘贴文章',
+                    _DashboardSection.article => '01 / 输入文章',
                     _DashboardSection.reference => '02 / 参考译文',
                     _ => '03 / 逐句回译',
                   },
@@ -450,12 +452,34 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
           label: const Text('查看参考译文'),
         ),
     };
+    final articleImport = OutlinedButton.icon(
+      onPressed:
+          widget.busy || widget.importing ? null : widget.onImportArticle,
+      icon: const Icon(Icons.article_outlined),
+      label: Text(widget.importing ? '导入中…' : '导入文章'),
+    );
     return compact
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [action, const SizedBox(height: 10), secondary],
+            children: [
+              action,
+              const SizedBox(height: 10),
+              if (_section == _DashboardSection.article) ...[
+                articleImport,
+                const SizedBox(height: 10),
+              ],
+              secondary,
+            ],
           )
-        : Row(children: [action, const SizedBox(width: 12), secondary]);
+        : Row(children: [
+            action,
+            const SizedBox(width: 12),
+            if (_section == _DashboardSection.article) ...[
+              articleImport,
+              const SizedBox(width: 12),
+            ],
+            secondary,
+          ]);
   }
 
   Widget _header() => Row(
@@ -542,7 +566,7 @@ class _WindowsDashboardState extends State<WindowsDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _cardTitle(Icons.article_outlined, '粘贴文章', '输入英文原文'),
+            _cardTitle(Icons.article_outlined, '输入文章', '粘贴或导入英文原文'),
             const SizedBox(height: 14),
             Expanded(
               child: Container(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'ai_review.dart';
+import 'article_import.dart';
 import 'credential_store.dart';
 import 'back_translation_page.dart';
 import 'practice_workbook.dart';
@@ -194,7 +195,7 @@ class _TranslationHomeState extends State<TranslationHome> {
   Future<void> _translate() async {
     if (_busy) return;
     if (_original.text.trim().isEmpty) {
-      setState(() => _error = '请先粘贴英文原文。');
+      setState(() => _error = '请先输入或导入英文原文。');
       return;
     }
     if (!_credentials.isConfigured(_source)) {
@@ -547,6 +548,69 @@ class _TranslationHomeState extends State<TranslationHome> {
     }
   }
 
+  Future<void> _importArticle() async {
+    if (_busy || _importing) return;
+    setState(() => _importing = true);
+    try {
+      final file = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ArticleImport.extensions,
+        dialogTitle: '导入英文文章',
+      );
+      if (file == null) return;
+      final text =
+          await ArticleImport.extract(file.name, await file.readAsBytes());
+      if (!mounted) return;
+      if (_original.text.trim().isNotEmpty || _result.isNotEmpty) {
+        final replace = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('替换当前文章？'),
+            content: Text(defaultTargetPlatform == TargetPlatform.windows
+                ? '导入新文章会替换输入框内容和当前参考译文。已保存的练习记录仍可从历史记录打开。'
+                : '导入新文章会替换输入框内容和当前参考译文。请先保存需要保留的内容。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('替换'),
+              ),
+            ],
+          ),
+        );
+        if (replace != true || !mounted) return;
+      }
+      _original.text = text;
+      setState(() {
+        _result = const [];
+        _activeSessionId = null;
+        _error = null;
+        _readingPreview = false;
+        _hudMoment = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('文章已导入，请检查文本后手动生成中文参考译文。')),
+      );
+    } on FormatException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('导入失败，请确认文件可读取。')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
+  }
+
   void _newArticle() {
     if (_busy) _cancel();
     setState(() {
@@ -617,6 +681,7 @@ class _TranslationHomeState extends State<TranslationHome> {
             onCancel: _cancel,
             onPractice: _startOrContinue,
             onImport: _importPractice,
+            onImportArticle: _importArticle,
             onOpenSession: _openSession,
             onDeleteSession: _deleteSession,
             onEditReference: _editReference,
@@ -735,7 +800,7 @@ class _TranslationHomeState extends State<TranslationHome> {
           ),
           const SizedBox(height: 10),
           const Text(
-            '粘贴一篇英文文章，选择翻译来源，得到按段对应的中文参考译文。',
+            '粘贴或导入一篇英文文章，选择翻译来源，得到按段对应的中文参考译文。',
             style: TextStyle(color: _muted, fontSize: 14, height: 1.6),
           ),
         ],
@@ -922,6 +987,16 @@ class _TranslationHomeState extends State<TranslationHome> {
                     ),
             ),
             const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _busy || _importing ? null : _importArticle,
+                icon: const Icon(Icons.article_outlined),
+                label: Text(
+                    _importing ? '正在导入…' : '导入英文文章（TXT / MD / DOCX / PDF）'),
+              ),
+            ),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
