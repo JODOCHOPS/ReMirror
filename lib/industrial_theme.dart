@@ -112,7 +112,9 @@ class IndustrialStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AnimatedContainer(
-        duration: const Duration(milliseconds: 280),
+        duration: MediaQuery.maybeOf(context)?.disableAnimations == true
+            ? Duration.zero
+            : const Duration(milliseconds: 160),
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
@@ -130,17 +132,13 @@ class IndustrialStatusPill extends StatelessWidget {
           children: [
             Icon(icon, size: 15, color: IndustrialPalette.accent),
             const SizedBox(width: 8),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              child: Text(
-                label,
-                key: ValueKey(label),
-                style: const TextStyle(
-                  color: IndustrialPalette.ink,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: .5,
-                ),
+            Text(
+              label,
+              style: const TextStyle(
+                color: IndustrialPalette.ink,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: .5,
               ),
             ),
           ],

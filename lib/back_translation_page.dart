@@ -25,8 +25,10 @@ class BackTranslationPage extends StatefulWidget {
     this.aiCredentials,
     this.reviewService,
     this.initialAnswers = const {},
+    this.initialReviews = const {},
     this.initiallySubmitted = false,
     this.onProgress,
+    this.onReviewsChanged,
   });
 
   final List<TranslatedParagraph> paragraphs;
@@ -34,8 +36,10 @@ class BackTranslationPage extends StatefulWidget {
   final TranslationCredentials? aiCredentials;
   final AiReviewService? reviewService;
   final Map<int, String> initialAnswers;
+  final Map<int, AiReviewResult> initialReviews;
   final bool initiallySubmitted;
   final void Function(Map<int, String> answers, bool submitted)? onProgress;
+  final ValueChanged<Map<int, AiReviewResult>>? onReviewsChanged;
 
   @override
   State<BackTranslationPage> createState() => _BackTranslationPageState();
@@ -61,6 +65,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
   int _reviewDone = 0;
   int _reviewTotal = 0;
   int _reviewJob = 0;
+  final Set<int> _reviewRetryIds = {};
 
   bool get _canReview =>
       widget.aiCredentials?.isConfigured(TranslationSource.ai) ?? false;
@@ -71,10 +76,14 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
   void initState() {
     super.initState();
     _answers.addAll(widget.initialAnswers);
+    _reviews.addAll(widget.initialReviews);
   }
 
   void _notifyProgress() =>
       widget.onProgress?.call(Map<int, String>.of(_answers), _submitted);
+
+  void _notifyReviews() =>
+      widget.onReviewsChanged?.call(Map<int, AiReviewResult>.of(_reviews));
 
   @override
   void dispose() {
@@ -157,11 +166,13 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
       _reviewing = false;
       _reviewDone = 0;
       _reviewTotal = 0;
+      _reviewRetryIds.clear();
       _submitted = false;
       _hudMoment = _PracticeHudMoment.enter;
       _hudSerial++;
     });
     _notifyProgress();
+    _notifyReviews();
   }
 
   void _submit() {
@@ -186,13 +197,17 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
     );
   }
 
-  Future<void> _runReview() async {
+  Future<void> _runReview({bool refresh = false}) async {
     if (_reviewing || !_canReview) return;
+    final retryIds = Set<int>.of(_reviewRetryIds);
+    final forceRefresh = refresh || retryIds.isNotEmpty;
     final pending = <AiReviewInput>[
       for (var index = 0; index < _sentences.length; index++)
         if (_sentences[index].reference != null &&
             (_answers[index]?.isNotEmpty ?? false) &&
-            !_reviews.containsKey(index))
+            (retryIds.isNotEmpty && !refresh
+                ? retryIds.contains(index)
+                : refresh || !_reviews.containsKey(index)))
           AiReviewInput(
             index: index,
             reference: _sentences[index].reference!,
@@ -201,6 +216,9 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
           ),
     ];
     if (pending.isEmpty) return;
+    _reviewRetryIds
+      ..clear()
+      ..addAll(pending.map((item) => item.index));
     final job = ++_reviewJob;
     setState(() {
       _reviewing = true;
@@ -215,12 +233,15 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
         final results = await _reviewService.reviewSentences(
           batch,
           widget.aiCredentials!,
+          forceRefresh: forceRefresh,
         );
         if (!mounted || job != _reviewJob) return;
         setState(() {
           _reviews.addAll(results);
           _reviewDone += batch.length;
+          _reviewRetryIds.removeAll(batch.map((item) => item.index));
         });
+        _notifyReviews();
       }
     } on AiReviewException catch (error) {
       if (mounted && job == _reviewJob) {
@@ -318,7 +339,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                   ),
                   const SizedBox(height: 22),
                   _progressCard(),
-                  if (_submitted && _canReview) ...[
+                  if (_submitted && (_canReview || _reviews.isNotEmpty)) ...[
                     const SizedBox(height: 12),
                     _reviewStatus(),
                   ],
@@ -464,7 +485,7 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
                             ],
                           ),
                         ),
-                        if (_submitted && _canReview) ...[
+                        if (_submitted && (_canReview || _reviews.isNotEmpty)) ...[
                           const SizedBox(height: 14),
                           _reviewStatus(),
                         ],
@@ -592,13 +613,19 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
               height: 16,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
-          if (_reviewError != null)
+          if (_reviewError != null && _canReview)
             TextButton(onPressed: _runReview, child: const Text('重试点评')),
           if (!_reviewing &&
               _reviewError == null &&
+              _canReview &&
               _reviews.isEmpty &&
               _answeredCount > 0)
-            TextButton(onPressed: _runReview, child: const Text('重新点评')),
+            TextButton(onPressed: _runReview, child: const Text('生成点评')),
+          if (!_reviewing && _canReview && _reviews.isNotEmpty)
+            TextButton(
+              onPressed: () => _runReview(refresh: true),
+              child: const Text('重新点评'),
+            ),
         ],
       ),
     );
@@ -694,7 +721,8 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
               style: TextStyle(color: _uiAccent, fontSize: 12),
             ),
           ],
-          if (_canReview && sentence.reference != null) ...[
+          if ((_canReview || _reviews.containsKey(index)) &&
+              sentence.reference != null) ...[
             const SizedBox(height: 16),
             _reviewPanel(index, answer),
           ],
@@ -754,10 +782,57 @@ class _BackTranslationPageState extends State<BackTranslationPage> {
           ),
           const SizedBox(height: 6),
           Text(detail, style: const TextStyle(color: _ink, height: 1.5)),
+          if (review != null) ...[
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: _border),
+            _reviewDetail(
+              '语法定位',
+              review.grammarIssues.isEmpty ? '未发现明确语法错误' : null,
+            ),
+            for (final issue in review.grammarIssues)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('“${issue.excerpt}”',
+                        style: const TextStyle(
+                            color: IndustrialPalette.error,
+                            fontWeight: FontWeight.w700)),
+                    Text(issue.problem,
+                        style: const TextStyle(color: _ink, height: 1.5)),
+                    Text('建议：${issue.correction}',
+                        style: const TextStyle(color: _muted, height: 1.5)),
+                  ],
+                ),
+              ),
+            if (review.naturalness.isNotEmpty)
+              _reviewDetail('表达自然度', review.naturalness),
+            if (review.suggestion.isNotEmpty)
+              _reviewDetail('修改建议', review.suggestion),
+            if (review.improvedEnglish.isNotEmpty)
+              _reviewDetail('推荐表达', review.improvedEnglish),
+          ],
         ],
       ),
     );
   }
+
+  Widget _reviewDetail(String title, String? detail) => Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title,
+                style: const TextStyle(
+                    color: _muted, fontSize: 11, fontWeight: FontWeight.w700)),
+            if (detail != null) ...[
+              const SizedBox(height: 4),
+              Text(detail, style: const TextStyle(color: _ink, height: 1.5)),
+            ],
+          ],
+        ),
+      );
 
   Widget _comparisonPanel({
     required bool compact,

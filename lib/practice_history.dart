@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 import 'back_translation.dart';
+import 'ai_review.dart';
 import 'practice_workbook.dart';
 import 'translation.dart';
 
@@ -18,6 +19,7 @@ class PracticeSession {
     required this.answers,
     required this.submitted,
     this.importedPractice,
+    this.reviews = const {},
   });
 
   final String id;
@@ -29,6 +31,7 @@ class PracticeSession {
   final PracticeWorkbook? importedPractice;
   final Map<int, String> answers;
   final bool submitted;
+  final Map<int, AiReviewResult> reviews;
 
   List<PracticeSentence> get sentences =>
       importedPractice?.sentences ?? buildPracticeSentences(paragraphs);
@@ -37,7 +40,11 @@ class PracticeSession {
   int get answeredCount =>
       answers.values.where((answer) => answer.trim().isNotEmpty).length;
 
-  PracticeSession withProgress(Map<int, String> value, bool isSubmitted) =>
+  PracticeSession withProgress(
+    Map<int, String> value,
+    bool isSubmitted, {
+    Map<int, AiReviewResult>? reviews,
+  }) =>
       PracticeSession(
         id: id,
         title: title,
@@ -48,6 +55,7 @@ class PracticeSession {
         answers: Map.of(value),
         submitted: isSubmitted,
         importedPractice: importedPractice,
+        reviews: Map.of(reviews ?? this.reviews),
       );
 
   Map<String, dynamic> toJson() => {
@@ -68,6 +76,9 @@ class PracticeSession {
         'importedPractice': importedPractice?.toJson(),
         'answers': answers.map((key, value) => MapEntry(key.toString(), value)),
         'submitted': submitted,
+        'reviews': reviews.map(
+          (key, value) => MapEntry(key.toString(), value.toJson()),
+        ),
       };
 
   factory PracticeSession.fromJson(Map<String, dynamic> json) =>
@@ -95,6 +106,12 @@ class PracticeSession {
           (key, value) => MapEntry(int.parse(key as String), value as String),
         ),
         submitted: json['submitted'] as bool,
+        reviews: (json['reviews'] as Map? ?? const {}).map(
+          (key, value) => MapEntry(
+            int.parse(key as String),
+            AiReviewResult.fromJson(value as Map<String, dynamic>),
+          ),
+        ),
       );
 }
 

@@ -29,7 +29,7 @@ class _IndustrialHudState extends State<IndustrialHud>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2000),
+    duration: const Duration(milliseconds: 900),
   )..addStatusListener(_onStatus);
   Timer? _dismissTimer;
   bool _started = false;
@@ -46,7 +46,7 @@ class _IndustrialHudState extends State<IndustrialHud>
     if (_reducedMotion) {
       _playing = false;
       if (!widget.persistent) {
-        _dismissTimer = Timer(const Duration(seconds: 2), () {
+        _dismissTimer = Timer(const Duration(milliseconds: 1200), () {
           if (mounted) setState(() => _visible = false);
         });
       }
@@ -96,7 +96,7 @@ class _IndustrialHudState extends State<IndustrialHud>
           );
     if (_reducedMotion) return content;
     return AnimatedSize(
-      duration: const Duration(milliseconds: 220),
+      duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
       alignment: Alignment.topCenter,
       child: content,
@@ -107,7 +107,7 @@ class _IndustrialHudState extends State<IndustrialHud>
         builder: (context, constraints) {
           final width =
               math.max(0.0, math.min(constraints.maxWidth - 24, 560.0));
-          final pop = Curves.easeOutBack.transform(_cue(time, .02, .18));
+          final pop = Curves.easeOutCubic.transform(_cue(time, .02, .22));
           final appear = _cue(time, .07, .17);
           final expand = Curves.easeInOutCubic.transform(_cue(time, .16, .32));
           final contract =
@@ -121,114 +121,118 @@ class _IndustrialHudState extends State<IndustrialHud>
           final titleOpacity =
               _cue(time, .45, .55) * (1 - _cue(time, .62, .72));
           final detailOpacity = _cue(time, .76, .86);
-          final exit = widget.persistent ? 1.0 : 1 - _cue(time, .9, 1);
-          final stageScale = (.62 + .38 * pop) * exit;
+          final exitOpacity = widget.persistent ? 1.0 : 1 - _cue(time, .78, 1);
+          final stageScale = .94 + .06 * pop;
 
-          return Center(
-            child: Transform.scale(
-              scale: stageScale,
-              child: SizedBox(
-                width: width,
-                height: 100,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Center(
-                      child: Opacity(
-                        opacity: appear,
-                        child: Container(
-                          width: width,
-                          height: height,
-                          clipBehavior: Clip.antiAlias,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF312F30),
-                            borderRadius: BorderRadius.circular(radius),
-                            border: Border.all(color: IndustrialPalette.border),
-                          ),
-                          child: Stack(
-                            children: [
-                              Positioned.fill(
-                                child: CustomPaint(
-                                  painter: _HudRipples(
-                                    time: time,
-                                    centerX: iconCenter,
-                                    height: height,
+          return Opacity(
+            opacity: exitOpacity,
+            child: Center(
+              child: Transform.scale(
+                scale: stageScale,
+                child: SizedBox(
+                  width: width,
+                  height: 100,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Center(
+                        child: Opacity(
+                          opacity: appear,
+                          child: Container(
+                            width: width,
+                            height: height,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF312F30),
+                              borderRadius: BorderRadius.circular(radius),
+                              border:
+                                  Border.all(color: IndustrialPalette.border),
+                            ),
+                            child: Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: CustomPaint(
+                                    painter: _HudRipples(
+                                      time: time,
+                                      centerX: iconCenter,
+                                      height: height,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Center(
-                                child: Opacity(
-                                  opacity: titleOpacity,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(widget.eyebrow,
-                                          style: const TextStyle(
-                                            color: IndustrialPalette.muted,
-                                            fontSize: 10,
-                                            letterSpacing: 2,
-                                            fontWeight: FontWeight.w700,
-                                          )),
-                                      const SizedBox(height: 3),
-                                      Text(widget.title,
-                                          style: const TextStyle(
-                                            color: IndustrialPalette.ink,
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.w700,
-                                          )),
-                                    ],
+                                Center(
+                                  child: Opacity(
+                                    opacity: titleOpacity,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(widget.eyebrow,
+                                            style: const TextStyle(
+                                              color: IndustrialPalette.muted,
+                                              fontSize: 10,
+                                              letterSpacing: 2,
+                                              fontWeight: FontWeight.w700,
+                                            )),
+                                        const SizedBox(height: 3),
+                                        Text(widget.title,
+                                            style: const TextStyle(
+                                              color: IndustrialPalette.ink,
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.w700,
+                                            )),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Positioned(
-                                left: 58,
-                                right: 24,
-                                top: 0,
-                                bottom: 0,
-                                child: Opacity(
-                                  opacity: detailOpacity,
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      widget.detail,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: IndustrialPalette.ink,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
+                                Positioned(
+                                  left: 58,
+                                  right: 24,
+                                  top: 0,
+                                  bottom: 0,
+                                  child: Opacity(
+                                    opacity: detailOpacity,
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        widget.detail,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: IndustrialPalette.ink,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: iconCenter - 17,
-                      top: 33,
-                      child: Opacity(
-                        opacity: _cue(time, .03, .14),
-                        child: Transform.scale(
-                          scale: pop,
-                          child: Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE9E7E4),
-                              borderRadius:
-                                  BorderRadius.circular(17 - 10 * contract),
+                              ],
                             ),
-                            child: const Icon(Icons.bolt_rounded,
-                                size: 23, color: Color(0xFF141313)),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                      Positioned(
+                        left: iconCenter - 17,
+                        top: 33,
+                        child: Opacity(
+                          opacity: _cue(time, .03, .14),
+                          child: Transform.scale(
+                            scale: pop,
+                            child: Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE9E7E4),
+                                borderRadius:
+                                    BorderRadius.circular(17 - 10 * contract),
+                              ),
+                              child: const Icon(Icons.bolt_rounded,
+                                  size: 23, color: Color(0xFF141313)),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

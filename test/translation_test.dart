@@ -187,4 +187,75 @@ void main() {
     );
     expect(result, '你好。');
   });
+
+  test('repeated text reuses the translation during one service lifetime',
+      () async {
+    var requests = 0;
+    final service = TranslationService(client: MockClient((request) async {
+      requests++;
+      return http.Response(
+        jsonEncode({
+          'data': {
+            'translations': [
+              {'translatedText': '同一句。'}
+            ]
+          }
+        }),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    }));
+    const credentials = TranslationCredentials(googleApiKey: 'key');
+    final first = await service.translateArticle(
+      english: 'Same sentence.\n\nSame sentence.',
+      source: TranslationSource.google,
+      credentials: credentials,
+    );
+    expect(first, hasLength(2));
+    expect(requests, 1);
+    await service.translateArticle(
+      english: 'Same sentence.',
+      source: TranslationSource.google,
+      credentials: credentials,
+    );
+    expect(requests, 1);
+    await service.translateChunk(
+      'Same sentence.',
+      TranslationSource.google,
+      const TranslationCredentials(googleApiKey: 'different-key'),
+    );
+    expect(requests, 2);
+  });
+
+  test('AI translation cache distinguishes models', () async {
+    var requests = 0;
+    final service = TranslationService(client: MockClient((_) async {
+      requests++;
+      return http.Response(
+        jsonEncode({
+          'choices': [
+            {
+              'message': {'content': '你好。'}
+            }
+          ]
+        }),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    }));
+    const first = TranslationCredentials(
+      aiEndpoint: 'https://example.com/v1',
+      aiApiKey: 'key',
+      aiModel: 'model-1',
+    );
+    const second = TranslationCredentials(
+      aiEndpoint: 'https://example.com/v1',
+      aiApiKey: 'key',
+      aiModel: 'model-2',
+    );
+    await service.translateChunk('Hello.', TranslationSource.ai, first);
+    await service.translateChunk('Hello.', TranslationSource.ai, first);
+    await service.translateChunk('Hello.', TranslationSource.ai, second);
+    expect(requests, 2);
+  });
 }

@@ -27,7 +27,7 @@ void main() {
     expect(taps, 1);
     expect(tester.getSize(find.byType(IndustrialHud)).height, greaterThan(50));
 
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(milliseconds: 800));
     await tester.pumpAndSettle();
     expect(tester.getSize(find.byType(IndustrialHud)).height, 0);
   });
@@ -45,7 +45,7 @@ void main() {
       ),
     ));
     await tester.pump(const Duration(milliseconds: 400));
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(milliseconds: 1000));
     await tester.pumpAndSettle();
     expect(find.byType(IndustrialStatusPill), findsOneWidget);
     expect(find.text('已完成 1 / 3 个片段'), findsOneWidget);

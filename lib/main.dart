@@ -1,10 +1,9 @@
-import 'dart:async';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'ai_review.dart';
 import 'credential_store.dart';
 import 'back_translation_page.dart';
 import 'practice_workbook.dart';
@@ -54,6 +53,7 @@ class _TranslationHomeState extends State<TranslationHome> {
   final _resultCardKey = GlobalKey();
   final _store = const CredentialStore();
   final _service = TranslationService();
+  final _reviewService = AiReviewService();
   TranslationCredentials _credentials = const TranslationCredentials();
   TranslationSource _source = defaultTargetPlatform == TargetPlatform.windows
       ? TranslationSource.offline
@@ -75,8 +75,6 @@ class _TranslationHomeState extends State<TranslationHome> {
   bool _readingPreview = false;
   _TranslationHudMoment? _hudMoment;
   int _hudSerial = 0;
-  DateTime? _hudStartTime;
-  Timer? _hudCompletionTimer;
 
   @override
   void initState() {
@@ -173,9 +171,9 @@ class _TranslationHomeState extends State<TranslationHome> {
   @override
   void dispose() {
     _job++;
-    _hudCompletionTimer?.cancel();
     _original.dispose();
     _service.close();
+    _reviewService.close();
     super.dispose();
   }
 
@@ -204,7 +202,6 @@ class _TranslationHomeState extends State<TranslationHome> {
       if (!mounted || !_credentials.isConfigured(_source)) return;
     }
     final job = ++_job;
-    _hudCompletionTimer?.cancel();
     setState(() {
       _busy = true;
       _error = null;
@@ -213,7 +210,6 @@ class _TranslationHomeState extends State<TranslationHome> {
       _total = 0;
       _hudMoment = _TranslationHudMoment.translating;
       _hudSerial++;
-      _hudStartTime = DateTime.now();
     });
     _focusResultOnSmallScreens();
     try {
@@ -258,21 +254,11 @@ class _TranslationHomeState extends State<TranslationHome> {
   }
 
   void _scheduleTranslationCompleteHud(int job) {
-    final elapsed = DateTime.now().difference(_hudStartTime!);
-    final remaining = const Duration(milliseconds: 2000) - elapsed;
-    void showComplete() {
-      if (!mounted || job != _job) return;
-      setState(() {
-        _hudMoment = _TranslationHudMoment.complete;
-        _hudSerial++;
-      });
-    }
-
-    if (remaining <= Duration.zero) {
-      showComplete();
-    } else {
-      _hudCompletionTimer = Timer(remaining, showComplete);
-    }
+    if (!mounted || job != _job) return;
+    setState(() {
+      _hudMoment = _TranslationHudMoment.complete;
+      _hudSerial++;
+    });
   }
 
   void _focusResultOnSmallScreens() {
@@ -283,7 +269,9 @@ class _TranslationHomeState extends State<TranslationHome> {
         Scrollable.ensureVisible(
           target,
           alignment: 0.04,
-          duration: const Duration(milliseconds: 350),
+          duration: MediaQuery.maybeOf(context)?.disableAnimations == true
+              ? Duration.zero
+              : const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
         );
       }
@@ -292,7 +280,6 @@ class _TranslationHomeState extends State<TranslationHome> {
 
   void _cancel() {
     _job++;
-    _hudCompletionTimer?.cancel();
     setState(() {
       _busy = false;
       _error = '已取消翻译。';
@@ -302,7 +289,6 @@ class _TranslationHomeState extends State<TranslationHome> {
 
   void _chooseSource(TranslationSource source) {
     if (_busy) _cancel();
-    _hudCompletionTimer?.cancel();
     setState(() {
       _source = source;
       _result = const [];
@@ -346,22 +332,40 @@ class _TranslationHomeState extends State<TranslationHome> {
         builder: (_) => BackTranslationPage(
           paragraphs: List.of(_result),
           aiCredentials: _credentials,
+          reviewService: _reviewService,
         ),
       ),
     );
   }
 
   Future<void> _openSession(PracticeSession session) async {
+    PracticeSession latestSession() {
+      for (final item in _sessions) {
+        if (item.id == session.id) return item;
+      }
+      return session;
+    }
+
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => BackTranslationPage(
           paragraphs: session.paragraphs,
           importedPractice: session.importedPractice,
           aiCredentials: _credentials,
+          reviewService: _reviewService,
           initialAnswers: session.answers,
+          initialReviews: session.reviews,
           initiallySubmitted: session.submitted,
           onProgress: (answers, submitted) {
-            _upsertSession(session.withProgress(answers, submitted));
+            _upsertSession(latestSession().withProgress(answers, submitted));
+          },
+          onReviewsChanged: (reviews) {
+            final latest = latestSession();
+            _upsertSession(latest.withProgress(
+              latest.answers,
+              latest.submitted,
+              reviews: reviews,
+            ));
           },
         ),
       ),
@@ -545,7 +549,6 @@ class _TranslationHomeState extends State<TranslationHome> {
 
   void _newArticle() {
     if (_busy) _cancel();
-    _hudCompletionTimer?.cancel();
     setState(() {
       _result = const [];
       _activeSessionId = null;

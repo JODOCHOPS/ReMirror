@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:remirror/ai_review.dart';
 import 'package:remirror/practice_history.dart';
 import 'package:remirror/practice_workbook.dart';
 import 'package:remirror/translation.dart';
@@ -60,6 +61,22 @@ void main() {
       importedPractice: imported,
       answers: const {0: 'Hello again.'},
       submitted: false,
+      reviews: const {
+        0: AiReviewResult(
+          AiReviewVerdict.mostlyAccurate,
+          '意思基本准确。',
+          grammarIssues: [
+            AiGrammarIssue(
+              excerpt: 'Hello again',
+              problem: '此处表达不够具体。',
+              correction: 'Hello, world',
+            ),
+          ],
+          naturalness: '稍显生硬。',
+          suggestion: '使用更贴近原意的表达。',
+          improvedEnglish: 'Hello, world.',
+        ),
+      },
     );
 
     final store = PracticeHistoryStore(directory: directory);
@@ -73,6 +90,8 @@ void main() {
     expect(restored.answers[0], 'Hello again.');
     expect(restored.importedPractice?.previousAnswers[0], 'Hello world.');
     expect(restored.importedPractice?.sourceBytes, isNotEmpty);
+    expect(restored.reviews[0]?.grammarIssues.single.excerpt, 'Hello again');
+    expect(restored.reviews[0]?.improvedEnglish, 'Hello, world.');
 
     await store.save([
       session.withProgress(const {0: 'Updated answer.'}, false)
@@ -82,5 +101,6 @@ void main() {
         .writeAsString('broken');
     final recovered = (await store.load()).single;
     expect(recovered.answers[0], 'Updated answer.');
+    expect(recovered.reviews[0]?.reason, '意思基本准确。');
   });
 }

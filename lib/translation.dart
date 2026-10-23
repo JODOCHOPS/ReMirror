@@ -120,6 +120,30 @@ class TranslationService {
   final DateTime Function() _now;
   final OfflineTranslator _offlineTranslator;
   final HtmlUnescape _unescape = HtmlUnescape();
+  final Map<String, String> _chunkCache = {};
+  final Map<String, Future<String>> _inFlight = {};
+
+  String _cacheKey(String text, TranslationSource source,
+      TranslationCredentials credentials) {
+    final provider = switch (source) {
+      TranslationSource.google => credentials.googleApiKey.trim(),
+      TranslationSource.baidu =>
+        '${credentials.baiduAppId.trim()}:${credentials.baiduSecret.trim()}',
+      TranslationSource.ai =>
+        '${credentials.aiEndpoint.trim()}:${credentials.aiModel.trim()}:${credentials.aiApiKey.trim()}',
+      TranslationSource.offline => '',
+    };
+    final identity = sha256.convert(utf8.encode(provider)).toString();
+    return jsonEncode([
+      source.name,
+      identity,
+      text.replaceAll('\r\n', '\n').trim(),
+    ]);
+  }
+
+  bool _isCached(String text, TranslationSource source,
+          TranslationCredentials credentials) =>
+      _chunkCache.containsKey(_cacheKey(text, source, credentials));
 
   void close() {
     if (_ownsClient) _client.close();
@@ -155,6 +179,7 @@ class TranslationService {
         (count, part) =>
             count + part.fold<int>(0, (n, pieces) => n + pieces.length));
     var completed = 0;
+    var baiduRequests = 0;
     final translated = <TranslatedParagraph>[];
     onProgress?.call(0, total);
 
@@ -166,9 +191,13 @@ class TranslationService {
           if (isCancelled?.call() ?? false) {
             throw const TranslationException('已取消翻译。');
           }
-          if (source == TranslationSource.baidu && completed > 0) {
+          if (source == TranslationSource.baidu &&
+              !_isCached(chunk, source, credentials)) {
             // The standard Baidu tier allows one request per second.
-            await Future<void>.delayed(const Duration(milliseconds: 1100));
+            if (baiduRequests > 0) {
+              await Future<void>.delayed(const Duration(milliseconds: 1100));
+            }
+            baiduRequests++;
           }
           pieces.add(await translateChunk(chunk, source, credentials));
           completed++;
@@ -193,8 +222,33 @@ class TranslationService {
     String text,
     TranslationSource source,
     TranslationCredentials credentials,
-  ) =>
-      switch (source) {
+  ) async {
+    final key = _cacheKey(text, source, credentials);
+    final cached = _chunkCache[key];
+    if (cached != null) return cached;
+    final running = _inFlight[key];
+    if (running != null) return running;
+    final request = _translateUncached(text, source, credentials);
+    _inFlight[key] = request;
+    try {
+      final value = await request;
+      if (value.trim().isNotEmpty) {
+        if (_chunkCache.length >= 512) {
+          _chunkCache.remove(_chunkCache.keys.first);
+        }
+        _chunkCache[key] = value;
+      }
+      return value;
+    } finally {
+      _inFlight.remove(key);
+    }
+  }
+
+  Future<String> _translateUncached(
+    String text,
+    TranslationSource source,
+    TranslationCredentials credentials,
+  ) => switch (source) {
         TranslationSource.google => _google(text, credentials.googleApiKey),
         TranslationSource.baidu => _baidu(
             text,

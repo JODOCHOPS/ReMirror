@@ -156,6 +156,10 @@ void main() {
                       'id': 0,
                       'verdict': 'accurate',
                       'reason': '意思准确，用词不同也正确。',
+                      'grammar_issues': [],
+                      'naturalness': '表达自然。',
+                      'suggestion': '继续保持。',
+                      'improved_english': 'The feline is asleep.',
                     },
                   ],
                 }),
@@ -201,5 +205,44 @@ void main() {
         observedInputs.last.first['student_english'], 'The feline is asleep.');
     expect(find.text('AI 点评 · 准确'), findsOneWidget);
     expect(find.text('意思准确，用词不同也正确。'), findsOneWidget);
+    expect(find.text('语法定位'), findsOneWidget);
+    expect(find.text('未发现明确语法错误'), findsOneWidget);
+    expect(find.text('表达自然。'), findsOneWidget);
+    await tester.ensureVisible(find.text('重新点评'));
+    await tester.tap(find.text('重新点评'));
+    await tester.pumpAndSettle();
+    expect(requests, 3);
+  });
+
+  testWidgets('saved review appears without a new AI request', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const MaterialApp(
+      home: BackTranslationPage(
+        paragraphs: [TranslatedParagraph('He goes home.', '他回家。')],
+        initialAnswers: {0: 'He go home.'},
+        initialReviews: {
+          0: AiReviewResult(
+            AiReviewVerdict.mostlyAccurate,
+            '意思基本准确。',
+            grammarIssues: [
+              AiGrammarIssue(
+                excerpt: 'He go',
+                problem: '第三人称单数动词需要加 s。',
+                correction: 'He goes',
+              ),
+            ],
+            naturalness: '不够自然。',
+            suggestion: '改正动词形式。',
+            improvedEnglish: 'He goes home.',
+          ),
+        },
+        initiallySubmitted: true,
+      ),
+    ));
+    expect(find.text('AI 点评 · 基本准确'), findsOneWidget);
+    expect(find.text('“He go”'), findsOneWidget);
+    expect(find.text('第三人称单数动词需要加 s。'), findsOneWidget);
+    expect(find.text('推荐表达'), findsOneWidget);
   });
 }
