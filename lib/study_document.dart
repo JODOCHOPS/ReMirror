@@ -41,8 +41,11 @@ class StudySentence {
     this.chinese = '',
     this.grammar,
     Map<String, Map<String, String>>? words,
+    Set<String>? savedWords,
+    this.skipped = false,
     List<StudyAttempt>? attempts,
   })  : words = words ?? {},
+        savedWords = savedWords ?? {},
         attempts = attempts ?? [];
 
   final int paragraph;
@@ -50,6 +53,8 @@ class StudySentence {
   String chinese;
   Map<String, String>? grammar;
   final Map<String, Map<String, String>> words;
+  final Set<String> savedWords;
+  bool skipped;
   final List<StudyAttempt> attempts;
 
   Map<String, dynamic> toJson() => {
@@ -58,6 +63,8 @@ class StudySentence {
         'chinese': chinese,
         'grammar': grammar,
         'words': words,
+        'savedWords': savedWords.toList(),
+        'skipped': skipped,
         'attempts': attempts.map((item) => item.toJson()).toList(),
       };
 
@@ -76,6 +83,10 @@ class StudySentence {
             ),
           ),
         ),
+        savedWords: (json['savedWords'] as List? ?? [])
+            .map((item) => item as String)
+            .toSet(),
+        skipped: json['skipped'] as bool? ?? false,
         attempts: (json['attempts'] as List? ?? [])
             .map((item) => StudyAttempt.fromJson(item as Map<String, dynamic>))
             .toList(),
@@ -92,6 +103,7 @@ class StudyDocument {
     this.step = 0,
     this.practiceIndex = 0,
     this.needsAlignmentReview = false,
+    this.finishedAt,
   }) : drafts = drafts ?? {};
 
   final String id;
@@ -102,6 +114,7 @@ class StudyDocument {
   int step;
   int practiceIndex;
   bool needsAlignmentReview;
+  DateTime? finishedAt;
 
   bool get hasAllReferences =>
       sentences.isNotEmpty &&
@@ -115,6 +128,7 @@ class StudyDocument {
         'step': step,
         'practiceIndex': practiceIndex,
         'needsAlignmentReview': needsAlignmentReview,
+        'finishedAt': finishedAt?.toIso8601String(),
         'sentences': sentences.map((item) => item.toJson()).toList(),
         'drafts': drafts.map((key, value) => MapEntry(key.toString(), value)),
       };
@@ -126,6 +140,9 @@ class StudyDocument {
         step: json['step'] as int? ?? 0,
         practiceIndex: json['practiceIndex'] as int? ?? 0,
         needsAlignmentReview: json['needsAlignmentReview'] as bool? ?? false,
+        finishedAt: json['finishedAt'] == null
+            ? null
+            : DateTime.parse(json['finishedAt'] as String),
         sentences: (json['sentences'] as List)
             .map((item) => StudySentence.fromJson(item as Map<String, dynamic>))
             .toList(),

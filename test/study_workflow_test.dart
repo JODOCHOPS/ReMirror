@@ -77,6 +77,8 @@ void main() {
       'partOfSpeech': '感叹词',
       'usage': '用于问候'
     };
+    sentence.savedWords.add('hello');
+    document.finishedAt = DateTime(2026, 1, 3);
     sentence.attempts.addAll([
       StudyAttempt(
           answer: 'Hello world.',
@@ -109,7 +111,16 @@ void main() {
         await ArticleImporter.importBytes('study.xlsx', bytes) as StudyDocument;
     expect(restored.sentences.single.grammar?['structure'], '主谓结构');
     expect(restored.sentences.single.words['hello']?['meaning'], '你好');
+    expect(restored.sentences.single.savedWords, contains('hello'));
     expect(restored.sentences.single.attempts.length, 2);
+    expect(restored.finishedAt, DateTime(2026, 1, 3));
+  });
+
+  test('skipped practice state survives local JSON roundtrip', () {
+    final document = StudyDocument.fromText('Hello.\n你好。');
+    document.sentences.single.skipped = true;
+    final restored = StudyDocument.fromJson(document.toJson());
+    expect(restored.sentences.single.skipped, isTrue);
   });
 
   test('ordinary XLSX lets the user map English and Chinese columns', () async {

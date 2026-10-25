@@ -477,7 +477,7 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
   Future<void> _analyzeWord(StudySentence sentence, String word) async {
     final key = word.toLowerCase();
     if (sentence.words.containsKey(key)) {
-      _showAnalysis(word, sentence.words[key]!);
+      _showWordAnalysis(sentence, word, key);
       return;
     }
     if (_busy || !await _ensureAi()) return;
@@ -488,12 +488,121 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
       if (!mounted) return;
       setState(() => sentence.words[key] = result);
       _save();
-      _showAnalysis(word, result);
+      _showWordAnalysis(sentence, word, key);
     } on LearningAiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  void _showWordAnalysis(StudySentence sentence, String word, String key) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(builder: (context, refresh) {
+        final saved = sentence.savedWords.contains(key);
+        return AlertDialog(
+          title: Text(word),
+          content: SizedBox(
+            width: 520,
+            child: ListView(shrinkWrap: true, children: [
+              for (final entry in sentence.words[key]!.entries) ...[
+                Text(_analysisLabel(entry.key),
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(entry.value),
+                const SizedBox(height: 14),
+              ],
+            ]),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  if (saved) {
+                    sentence.savedWords.remove(key);
+                  } else {
+                    sentence.savedWords.add(key);
+                  }
+                });
+                refresh(() {});
+                _save();
+              },
+              child: Text(saved ? '移出生词库' : '加入生词库'),
+            ),
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('关闭')),
+          ],
+        );
+      }),
+    );
+  }
+
+  void _openVocabulary() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(builder: (context, refresh) {
+        final entries =
+            <({StudyDocument document, StudySentence sentence, String word})>[];
+        for (final document in _documents) {
+          for (final sentence in document.sentences) {
+            for (final word in sentence.savedWords) {
+              if (sentence.words.containsKey(word)) {
+                entries
+                    .add((document: document, sentence: sentence, word: word));
+              }
+            }
+          }
+        }
+        entries.sort((a, b) => a.word.compareTo(b.word));
+        return AlertDialog(
+          title: Text('生词库（${entries.length}）'),
+          content: SizedBox(
+            width: 650,
+            height: 480,
+            child: entries.isEmpty
+                ? const Center(child: Text('暂无生词。在阅读页点击单词并选择“加入生词库”。'))
+                : ListView.builder(
+                    itemCount: entries.length,
+                    itemBuilder: (context, index) {
+                      final entry = entries[index];
+                      final analysis = entry.sentence.words[entry.word]!;
+                      return ListTile(
+                        title: Text(entry.word),
+                        subtitle: Text(
+                          '${analysis['meaning'] ?? ''}\n${entry.document.title}',
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        isThreeLine: true,
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showWordAnalysis(
+                              entry.sentence, entry.word, entry.word);
+                        },
+                        trailing: IconButton(
+                          tooltip: '移出生词库',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () {
+                            setState(() =>
+                                entry.sentence.savedWords.remove(entry.word));
+                            refresh(() {});
+                            _save();
+                          },
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('关闭')),
+          ],
+        );
+      }),
+    );
   }
 
   void _showAnalysis(String title, Map<String, String> result) {
@@ -578,6 +687,7 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
       if (sentence.english != english.trim()) {
         sentence.grammar = null;
         sentence.words.clear();
+        sentence.savedWords.clear();
       }
       sentence.english = english.trim();
       if (sentence.chinese != chinese.trim()) sentence.grammar = null;
@@ -626,7 +736,10 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
         credentials: _credentials,
       );
       if (!mounted || _current != document) return;
-      setState(() => attempt.review = review);
+      setState(() {
+        attempt.review = review;
+        sentence.skipped = false;
+      });
       _save();
     } on LearningAiException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -644,6 +757,27 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
           (document.sentences[index].attempts.isEmpty
               ? ''
               : document.sentences[index].attempts.last.answer));
+    });
+    _save();
+  }
+
+  void _skipSentence() {
+    final document = _current;
+    if (document == null || _busy || document.sentences.isEmpty) return;
+    setState(() => document.sentences[document.practiceIndex].skipped = true);
+    if (document.practiceIndex + 1 < document.sentences.length) {
+      _goToSentence(document.practiceIndex + 1);
+    } else {
+      _finishPractice();
+    }
+  }
+
+  void _finishPractice() {
+    final document = _current;
+    if (document == null || _busy) return;
+    setState(() {
+      document.finishedAt = DateTime.now();
+      _error = null;
     });
     _save();
   }
@@ -692,6 +826,10 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
               onPressed: _busy ? null : _import,
               icon: const Icon(Icons.upload_file),
               label: const Text('导入文件')),
+          TextButton.icon(
+              onPressed: _openVocabulary,
+              icon: const Icon(Icons.bookmarks_outlined),
+              label: const Text('生词库')),
           TextButton.icon(
               onPressed:
                   document?.sentences.isNotEmpty == true ? _export : null,
@@ -904,11 +1042,12 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
     if (document.sentences.isEmpty) {
       return const Center(child: Text('没有可练习的句子。'));
     }
+    if (document.finishedAt != null) return _practiceSummary(document);
     final index =
         document.practiceIndex.clamp(0, document.sentences.length - 1).toInt();
     final sentence = document.sentences[index];
     final last = sentence.attempts.isEmpty ? null : sentence.attempts.last;
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('第 ${index + 1} / ${document.sentences.length} 句',
@@ -943,8 +1082,7 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
           if (last.answer != _answer.text.trim())
             const Text('当前输入已修改；再次提交后生成新评价。'),
           if (last.review != null)
-            Expanded(
-                child: ListView(children: [
+            Column(children: [
               for (final field in [
                 'grammar',
                 'meaning',
@@ -957,28 +1095,78 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
                 ),
               if (sentence.attempts.length > 1)
                 Text('已保存 ${sentence.attempts.length} 次作答，均会进入 XLSX。'),
-            ])),
+            ]),
         ],
-        const Spacer(),
-        Row(children: [
-          TextButton(
-              onPressed: _busy
-                  ? null
-                  : () {
-                      setState(() => document.step = 1);
-                      _save();
-                    },
-              child: const Text('返回阅读')),
-          const Spacer(),
-          OutlinedButton(
-              onPressed: index > 0 ? () => _goToSentence(index - 1) : null,
-              child: const Text('上一句')),
-          const SizedBox(width: 12),
+        const SizedBox(height: 20),
+        Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () {
+                          setState(() => document.step = 1);
+                          _save();
+                        },
+                  child: const Text('返回阅读')),
+              Wrap(spacing: 12, children: [
+                OutlinedButton(
+                    onPressed: !_busy && index > 0
+                        ? () => _goToSentence(index - 1)
+                        : null,
+                    child: const Text('上一句')),
+                OutlinedButton(
+                    onPressed: _busy ? null : _skipSentence,
+                    child: const Text('跳过')),
+                FilledButton(
+                    onPressed: _busy
+                        ? null
+                        : index + 1 < document.sentences.length
+                            ? () => _goToSentence(index + 1)
+                            : _finishPractice,
+                    child: Text(
+                        index + 1 < document.sentences.length ? '下一句' : '结束')),
+              ]),
+            ]),
+      ]),
+    );
+  }
+
+  Widget _practiceSummary(StudyDocument document) {
+    final reviewed = document.sentences
+        .where((sentence) =>
+            !sentence.skipped &&
+            sentence.attempts.any((attempt) => attempt.review != null))
+        .length;
+    final skipped =
+        document.sentences.where((sentence) => sentence.skipped).length;
+    final pending = document.sentences.length - reviewed - skipped;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('本轮练习结束', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 16),
+        Text('已评价 $reviewed 句 · 已跳过 $skipped 句 · 待练习 $pending 句'),
+        const SizedBox(height: 20),
+        Wrap(spacing: 12, runSpacing: 12, children: [
           FilledButton(
-              onPressed: index + 1 < document.sentences.length
-                  ? () => _goToSentence(index + 1)
-                  : null,
-              child: const Text('下一句')),
+            onPressed: () {
+              setState(() => document.finishedAt = null);
+              _save();
+            },
+            child: const Text('继续练习'),
+          ),
+          OutlinedButton(
+            onPressed: () {
+              setState(() => document.step = 1);
+              _save();
+            },
+            child: const Text('返回阅读'),
+          ),
+          OutlinedButton(onPressed: _export, child: const Text('导出 XLSX')),
         ]),
       ]),
     );

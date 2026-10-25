@@ -171,6 +171,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('用于问候'), findsOneWidget);
     expect(ai.wordCalls, 1);
+    await tester.tap(find.text('加入生词库'));
+    await tester.pumpAndSettle();
+    expect(
+        store.documents.single.sentences.single.savedWords, contains('hello'));
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('生词库'));
+    await tester.pumpAndSettle();
+    expect(find.text('生词库（1）'), findsOneWidget);
+    expect(find.text('hello'), findsOneWidget);
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('分析句子'));
@@ -187,7 +197,50 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('英文原句'), findsOneWidget);
     expect(find.text('意思准确'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('返回阅读')).dy -
+          tester.getBottomRight(find.text('继续保持')).dy,
+      lessThan(100),
+    );
     expect(store.documents.single.sentences.single.attempts.single.review,
         isNotNull);
+  });
+
+  testWidgets('skipping a sentence and finishing shows a saved summary',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final store = _MemoryStore()
+      ..documents = [
+        StudyDocument(
+          id: 'practice',
+          title: 'Practice',
+          sourceText: 'Hello. Bye.',
+          step: 2,
+          sentences: [
+            StudySentence(paragraph: 1, english: 'Hello.', chinese: '你好。'),
+            StudySentence(paragraph: 1, english: 'Bye.', chinese: '再见。'),
+          ],
+        ),
+      ];
+    await tester.pumpWidget(MaterialApp(
+      home: WindowsStudyPage(
+        studyStore: store,
+        credentialStore: const _Credentials(),
+        translationService: _Translation(),
+        aiService: _Ai(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('跳过'));
+    await tester.pumpAndSettle();
+    expect(find.text('第 2 / 2 句'), findsOneWidget);
+    expect(store.documents.single.sentences.first.skipped, isTrue);
+    expect(find.text('结束'), findsOneWidget);
+    await tester.tap(find.text('结束'));
+    await tester.pumpAndSettle();
+    expect(find.text('本轮练习结束'), findsOneWidget);
+    expect(find.text('已评价 0 句 · 已跳过 1 句 · 待练习 1 句'), findsOneWidget);
+    expect(store.documents.single.finishedAt, isNotNull);
   });
 }

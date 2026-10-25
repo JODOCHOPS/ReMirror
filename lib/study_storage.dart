@@ -65,13 +65,18 @@ Uint8List exportStudy(StudyDocument document) {
   final workbook = Excel.createExcel();
   workbook.rename('Sheet1', '文章');
   final article = workbook['文章'];
-  _row(article, 0, ['段落', '英文原句', '中文参考']);
+  _row(article, 0, ['段落', '英文原句', '中文参考', '练习状态']);
   for (var index = 0; index < document.sentences.length; index++) {
     final sentence = document.sentences[index];
     _row(article, index + 1, [
       '${sentence.paragraph}',
       sentence.english,
       sentence.chinese,
+      sentence.skipped
+          ? '已跳过'
+          : sentence.attempts.any((attempt) => attempt.review != null)
+              ? '已评价'
+              : '待练习',
     ]);
   }
   article.setColumnWidth(1, 70);
@@ -93,7 +98,7 @@ Uint8List exportStudy(StudyDocument document) {
   }
 
   final words = workbook['生词'];
-  _row(words, 0, ['句子序号', '单词', '上下文释义', '词性', '用法']);
+  _row(words, 0, ['句子序号', '单词', '上下文释义', '词性', '用法', '已加入生词库']);
   var wordRow = 1;
   for (var index = 0; index < document.sentences.length; index++) {
     for (final entry in document.sentences[index].words.entries) {
@@ -103,6 +108,7 @@ Uint8List exportStudy(StudyDocument document) {
         entry.value['meaning'] ?? '',
         entry.value['partOfSpeech'] ?? '',
         entry.value['usage'] ?? '',
+        document.sentences[index].savedWords.contains(entry.key) ? '是' : '否',
       ]);
     }
   }
