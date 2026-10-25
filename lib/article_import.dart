@@ -1,17 +1,15 @@
 import 'dart:convert';
-import 'dart:ffi' as ffi;
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:ffi/ffi.dart';
 import 'package:markdown/markdown.dart' as markdown;
-import 'package:pdfium_flutter/pdfium_flutter.dart';
+import 'package:pdf_document/pdf_document.dart' as pdf;
+import 'package:pdf_graphics/pdf_graphics.dart' as pdf_graphics;
 import 'package:xml/xml.dart';
 
 /// Extracts editable article text without starting a translation request.
 class ArticleImport {
   static const extensions = ['txt', 'md', 'docx', 'pdf'];
-  static bool _pdfiumInitialized = false;
 
   static Future<String> extract(String fileName, Uint8List bytes) async {
     if (bytes.length > 50 * 1024 * 1024) {
@@ -213,63 +211,16 @@ class ArticleImport {
   }
 
   static Future<String> _extractPdf(Uint8List bytes) async {
-    final pdfium = pdfiumBindings;
-    if (!_pdfiumInitialized) {
-      pdfium.FPDF_InitLibrary();
-      _pdfiumInitialized = true;
-    }
-    final source = calloc<ffi.Uint8>(bytes.length);
-    source.asTypedList(bytes.length).setAll(0, bytes);
-    FPDF_DOCUMENT? document;
     try {
-      document = pdfium.FPDF_LoadMemDocument(
-        source.cast<ffi.Void>(),
-        bytes.length,
-        ffi.nullptr,
-      );
-      if (document.address == 0) throw const FormatException('PDF 打开失败。');
+      final document = pdf.PdfDocument.open(bytes);
       final pages = <String>[];
-      for (var index = 0; index < pdfium.FPDF_GetPageCount(document); index++) {
-        final page = pdfium.FPDF_LoadPage(document, index);
-        if (page.address == 0) continue;
-        try {
-          final textPage = pdfium.FPDFText_LoadPage(page);
-          if (textPage.address == 0) continue;
-          try {
-            final length = pdfium.FPDFText_CountChars(textPage);
-            if (length <= 0) continue;
-            final buffer = calloc<ffi.UnsignedShort>(length + 1);
-            try {
-              final written = pdfium.FPDFText_GetText(
-                textPage,
-                0,
-                length + 1,
-                buffer,
-              );
-              if (written > 1) {
-                final pageText = String.fromCharCodes(
-                  buffer.cast<ffi.Uint16>().asTypedList(written - 1),
-                ).trim();
-                if (pageText.isNotEmpty) pages.add(pageText);
-              }
-            } finally {
-              calloc.free(buffer);
-            }
-          } finally {
-            pdfium.FPDFText_ClosePage(textPage);
-          }
-        } finally {
-          pdfium.FPDF_ClosePage(page);
-        }
+      for (var index = 0; index < document.pageCount; index++) {
+        final page = pdf_graphics.PdfTextExtractor.extract(document, index).text.trim();
+        if (page.isNotEmpty) pages.add(page);
       }
       return pages.join('\n\n');
     } catch (_) {
       throw const FormatException('无法读取 PDF 文件，请确认文件未损坏或未加密。');
-    } finally {
-      if (document != null && document.address != 0) {
-        pdfium.FPDF_CloseDocument(document);
-      }
-      calloc.free(source);
     }
   }
 

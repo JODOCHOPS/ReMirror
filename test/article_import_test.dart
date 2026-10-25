@@ -66,7 +66,7 @@ print('skip me');
     final content = utf8.encode(xml);
     final archive = Archive()
       ..addFile(ArchiveFile('word/document.xml', content.length, content));
-    final bytes = Uint8List.fromList(ZipEncoder().encode(archive)!);
+    final bytes = Uint8List.fromList(ZipEncoder().encode(archive));
     expect(
       await ArticleImport.extract('article.docx', bytes),
       'Heading\n\nHello world.\n\nOne | Two',

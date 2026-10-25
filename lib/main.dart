@@ -15,6 +15,7 @@ import 'sentence_splitter.dart';
 import 'windows_dashboard.dart';
 import 'industrial_theme.dart';
 import 'industrial_hud.dart';
+import 'windows_study_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,7 +39,9 @@ class ReMirrorApp extends StatelessWidget {
         theme: industrialTheme(),
         scrollBehavior:
             const MaterialScrollBehavior().copyWith(scrollbars: false),
-        home: const TranslationHome(),
+        home: defaultTargetPlatform == TargetPlatform.windows
+            ? const WindowsStudyPage()
+            : const TranslationHome(),
       );
 }
 

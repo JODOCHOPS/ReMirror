@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:excel/excel.dart';
+import 'package:excel_community/excel_community.dart';
 
 import 'back_translation.dart';
 
@@ -227,7 +227,7 @@ Excel _decodeWorkbook(Uint8List bytes) {
   });
   final content = utf8.encode(xml);
   archive.addFile(ArchiveFile('xl/styles.xml', content.length, content));
-  return Excel.decodeBytes(ZipEncoder().encode(archive)!);
+  return Excel.decodeBytes(ZipEncoder().encode(archive));
 }
 
 String? _text(List<Data?> row, int column) {

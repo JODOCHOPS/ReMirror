@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:excel/excel.dart';
+import 'package:excel_community/excel_community.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remirror/back_translation.dart';
 import 'package:remirror/practice_workbook.dart';
@@ -101,7 +101,7 @@ Uint8List _exampleWorkbook() {
   );
   final content = utf8.encode(xml);
   archive.addFile(ArchiveFile('xl/styles.xml', content.length, content));
-  return Uint8List.fromList(ZipEncoder().encode(archive)!);
+  return Uint8List.fromList(ZipEncoder().encode(archive));
 }
 
 void _put(Sheet sheet, String address, String value) {
