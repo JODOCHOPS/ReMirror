@@ -10,14 +10,23 @@ import 'package:pdf_graphics/pdf_graphics.dart' as pdf_graphics;
 import 'practice_workbook.dart';
 import 'sentence_splitter.dart';
 import 'study_document.dart';
+import 'study_library.dart';
+
+class StudyImportBundle {
+  StudyImportBundle(this.document, this.library);
+
+  final StudyDocument document;
+  final StudyLibrary library;
+}
 
 class SpreadsheetPreview {
   SpreadsheetPreview(this.workbook);
 
   final Excel workbook;
 
-  List<String> get sheets =>
-      workbook.tables.keys.where((name) => name != '_ReMirror').toList();
+  List<String> get sheets => workbook.tables.keys
+      .where((name) => name != '_ReMirror' && name != '_ReMirrorLibrary')
+      .toList();
 
   List<List<String>> rows(String sheetName) => [
         for (final row in workbook.tables[sheetName]?.rows ?? <List<Data?>>[])
@@ -119,9 +128,18 @@ class ArticleImporter {
         if (saved != null && saved.rows.isNotEmpty) {
           final serialized = saved.rows.first.first?.value?.toString();
           if (serialized != null) {
-            return StudyDocument.fromJson(
-              jsonDecode(serialized) as Map<String, dynamic>,
-            );
+            final document = StudyDocument.fromJson(
+                jsonDecode(serialized) as Map<String, dynamic>);
+            final librarySheet = workbook.tables['_ReMirrorLibrary'];
+            final libraryJson =
+                librarySheet?.rows.firstOrNull?.firstOrNull?.value?.toString();
+            if (libraryJson != null) {
+              return StudyImportBundle(
+                  document,
+                  StudyLibrary.fromJson(
+                      jsonDecode(libraryJson) as Map<String, dynamic>));
+            }
+            return document;
           }
         }
         try {

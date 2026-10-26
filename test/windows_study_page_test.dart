@@ -6,9 +6,11 @@ import 'package:remirror/learning_ai.dart';
 import 'package:remirror/main.dart';
 import 'package:remirror/practice_history.dart';
 import 'package:remirror/study_document.dart';
+import 'package:remirror/study_library.dart';
 import 'package:remirror/study_storage.dart';
 import 'package:remirror/translation.dart';
 import 'package:remirror/windows_study_page.dart';
+import 'package:remirror/word_lemma.dart';
 
 class _MemoryStore extends StudyStore {
   List<StudyDocument> documents = [];
@@ -22,6 +24,24 @@ class _MemoryStore extends StudyStore {
 
   @override
   Future<void> save(List<StudyDocument> value) async => documents = value;
+}
+
+class _MemoryLibraryStore extends StudyLibraryStore {
+  StudyLibrary library = StudyLibrary();
+
+  @override
+  Future<StudyLibrary> load() async => library;
+
+  @override
+  Future<void> save(StudyLibrary value) async => library = value;
+}
+
+class _Lemmas extends WordLemmaResolver {
+  @override
+  Future<String> lemma(String word) async => switch (word.toLowerCase()) {
+        'went' || 'gone' || 'goes' || 'going' => 'go',
+        _ => word.toLowerCase(),
+      };
 }
 
 class _OldHistory extends PracticeHistoryStore {
@@ -58,8 +78,9 @@ class _Ai extends LearningAiService {
   int wordCalls = 0;
 
   @override
-  Future<Map<String, String>> analyzeGrammar(String english, String chinese,
-      TranslationCredentials credentials) async {
+  Future<Map<String, String>> analyzeGrammar(
+      String english, String chinese, TranslationCredentials credentials,
+      {GrammarDepth depth = GrammarDepth.standard}) async {
     grammarCalls++;
     return {
       'structure': '主谓结构',
@@ -119,6 +140,8 @@ void main() {
       translationService: _Translation(),
       aiService: _Ai(),
       legacyStore: _OldHistory([old]),
+      libraryStore: _MemoryLibraryStore(),
+      lemmaResolver: _Lemmas(),
     )));
     await tester.pumpAndSettle();
     expect(store.documents.single.title, 'Old article');
@@ -148,6 +171,8 @@ void main() {
       credentialStore: const _Credentials(),
       translationService: _Translation(),
       aiService: ai,
+      libraryStore: _MemoryLibraryStore(),
+      lemmaResolver: _Lemmas(),
     )));
     await tester.pumpAndSettle();
 
@@ -229,6 +254,8 @@ void main() {
         credentialStore: const _Credentials(),
         translationService: _Translation(),
         aiService: _Ai(),
+        libraryStore: _MemoryLibraryStore(),
+        lemmaResolver: _Lemmas(),
       ),
     ));
     await tester.pumpAndSettle();
@@ -242,5 +269,92 @@ void main() {
     expect(find.text('本轮练习结束'), findsOneWidget);
     expect(find.text('已评价 0 句 · 已跳过 1 句 · 待练习 1 句'), findsOneWidget);
     expect(store.documents.single.finishedAt, isNotNull);
+  });
+
+  testWidgets('saved word highlights inflections after its source is deleted',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1200, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final source = StudyDocument(
+      id: 'source',
+      title: 'First',
+      sourceText: 'Go.',
+      sentences: [
+        StudySentence(
+          paragraph: 1,
+          english: 'Go.',
+          chinese: '走。',
+          isFavorite: true,
+          grammar: {
+            'structure': '祈使句',
+            'grammar': '动词原形',
+            'explanation': '表示命令'
+          },
+          words: {
+            'go': {'meaning': '走', 'partOfSpeech': '动词', 'usage': '表示移动'}
+          },
+          savedWords: {'go'},
+        )
+      ],
+    );
+    final other = StudyDocument(
+      id: 'other',
+      title: 'Second',
+      sourceText: 'He went.',
+      step: 1,
+      sentences: [
+        StudySentence(paragraph: 1, english: 'He went.', chinese: '他走了。')
+      ],
+    );
+    final store = _MemoryStore()..documents = [source, other];
+    final libraryStore = _MemoryLibraryStore();
+    await tester.pumpWidget(MaterialApp(
+        home: WindowsStudyPage(
+      studyStore: store,
+      libraryStore: libraryStore,
+      lemmaResolver: _Lemmas(),
+      credentialStore: const _Credentials(),
+      translationService: _Translation(),
+      aiService: _Ai(),
+    )));
+    await tester.pumpAndSettle();
+    expect(libraryStore.library.words.keys, contains('go'));
+    expect(libraryStore.library.sentences.length, 1);
+
+    await tester.tap(find.text('Second').last);
+    await tester.pumpAndSettle();
+    TextSpan wordSpan() {
+      final rich = tester.widget<RichText>(find
+          .descendant(
+              of: find.byType(InteractiveEnglish),
+              matching: find.byType(RichText))
+          .first);
+      TextSpan? search(InlineSpan span) {
+        if (span is! TextSpan) return null;
+        if (span.text == 'went') return span;
+        for (final child in span.children ?? const <InlineSpan>[]) {
+          final found = search(child);
+          if (found != null) return found;
+        }
+        return null;
+      }
+
+      return search(rich.text)!;
+    }
+
+    expect(wordSpan().style?.backgroundColor, isNotNull);
+
+    await tester.tap(find.byTooltip('删除 First'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除').last);
+    await tester.pumpAndSettle();
+    expect(store.documents.map((item) => item.id), ['other']);
+    expect(libraryStore.library.words.keys, contains('go'));
+    expect(libraryStore.library.sentences.length, 1);
+    expect(wordSpan().style?.backgroundColor, isNotNull);
+
+    await tester.tap(find.text('撤销'));
+    await tester.pumpAndSettle();
+    expect(store.documents.map((item) => item.id), contains('source'));
   });
 }

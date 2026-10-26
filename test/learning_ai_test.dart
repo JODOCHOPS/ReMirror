@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:remirror/learning_ai.dart';
+import 'package:remirror/study_library.dart';
 import 'package:remirror/translation.dart';
 
 void main() {
@@ -74,5 +75,36 @@ void main() {
       ),
       throwsA(isA<LearningAiException>()),
     );
+  });
+
+  test('grammar request uses the selected depth and structured sections',
+      () async {
+    String? sentSystem;
+    final client = MockClient((request) async {
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      sentSystem = (body['messages'] as List).first['content'] as String;
+      return http.Response(
+          jsonEncode({
+            'choices': [
+              {
+                'message': {
+                  'content': jsonEncode({
+                    'skeleton': '主语加谓语。',
+                    'points': '动名词作主语。',
+                    'understanding': '表达一般事实。',
+                  })
+                }
+              }
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'});
+    });
+    final result = await LearningAiService(client: client).analyzeGrammar(
+        'Learning helps.', '学习有帮助。', credentials,
+        depth: GrammarDepth.beginner);
+    expect(result['skeleton'], '主语加谓语。');
+    expect(sentSystem, contains('面向入门水平'));
+    expect(sentSystem, contains('skeleton、points、understanding'));
   });
 }

@@ -6,6 +6,7 @@ import 'package:excel_community/excel_community.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'study_document.dart';
+import 'study_library.dart';
 
 class StudyStore {
   const StudyStore();
@@ -61,7 +62,7 @@ class StudyStore {
   }
 }
 
-Uint8List exportStudy(StudyDocument document) {
+Uint8List exportStudy(StudyDocument document, {StudyLibrary? library}) {
   final workbook = Excel.createExcel();
   workbook.rename('Sheet1', '文章');
   final article = workbook['文章'];
@@ -83,18 +84,30 @@ Uint8List exportStudy(StudyDocument document) {
   article.setColumnWidth(2, 70);
 
   final grammar = workbook['语法分析'];
-  _row(grammar, 0, ['句子序号', '英文原句', '句子结构', '关键语法', '解释']);
+  _row(grammar, 0, ['句子序号', '英文原句', '分析深度', '句子骨架', '关键语法', '中文理解']);
   var grammarRow = 1;
   for (var index = 0; index < document.sentences.length; index++) {
     final sentence = document.sentences[index];
-    if (sentence.grammar == null) continue;
-    _row(grammar, grammarRow++, [
-      '${index + 1}',
-      sentence.english,
-      sentence.grammar!['structure'] ?? '',
-      sentence.grammar!['grammar'] ?? '',
-      sentence.grammar!['explanation'] ?? '',
-    ]);
+    if (sentence.grammar != null) {
+      _row(grammar, grammarRow++, [
+        '${index + 1}',
+        sentence.english,
+        '旧版',
+        sentence.grammar!['structure'] ?? '',
+        sentence.grammar!['grammar'] ?? '',
+        sentence.grammar!['explanation'] ?? '',
+      ]);
+    }
+    for (final entry in sentence.grammarByDepth.entries) {
+      _row(grammar, grammarRow++, [
+        '${index + 1}',
+        sentence.english,
+        entry.key,
+        entry.value['skeleton'] ?? '',
+        entry.value['points'] ?? '',
+        entry.value['understanding'] ?? '',
+      ]);
+    }
   }
 
   final words = workbook['生词'];
@@ -147,6 +160,9 @@ Uint8List exportStudy(StudyDocument document) {
   }
 
   _row(workbook['_ReMirror'], 0, [jsonEncode(document.toJson())]);
+  if (library != null) {
+    _row(workbook['_ReMirrorLibrary'], 0, [jsonEncode(library.toJson())]);
+  }
   final encoded = workbook.encode();
   if (encoded == null) throw const FormatException('生成 XLSX 文件失败。');
   return Uint8List.fromList(encoded);

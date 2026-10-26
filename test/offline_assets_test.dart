@@ -29,4 +29,24 @@ void main() {
       db.close();
     }
   });
+
+  test('bundled dictionary identifies regular and irregular word forms', () {
+    final db = sqlite3.open('assets/offline/dictionary.sqlite',
+        mode: OpenMode.readOnly);
+    try {
+      for (final entry in {
+        'went': 'go',
+        'gone': 'go',
+        'changes': 'change',
+        'changed': 'change',
+        'changing': 'change',
+      }.entries) {
+        final rows = db.select(
+            'SELECT lemma FROM entries WHERE word = ?', [entry.key]);
+        expect(rows.single['lemma'], entry.value, reason: entry.key);
+      }
+    } finally {
+      db.close();
+    }
+  });
 }

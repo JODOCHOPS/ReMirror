@@ -40,11 +40,14 @@ class StudySentence {
     required this.english,
     this.chinese = '',
     this.grammar,
+    Map<String, Map<String, String>>? grammarByDepth,
     Map<String, Map<String, String>>? words,
     Set<String>? savedWords,
+    this.isFavorite = false,
     this.skipped = false,
     List<StudyAttempt>? attempts,
-  })  : words = words ?? {},
+  })  : grammarByDepth = grammarByDepth ?? {},
+        words = words ?? {},
         savedWords = savedWords ?? {},
         attempts = attempts ?? [];
 
@@ -52,8 +55,10 @@ class StudySentence {
   String english;
   String chinese;
   Map<String, String>? grammar;
+  final Map<String, Map<String, String>> grammarByDepth;
   final Map<String, Map<String, String>> words;
   final Set<String> savedWords;
+  bool isFavorite;
   bool skipped;
   final List<StudyAttempt> attempts;
 
@@ -62,8 +67,10 @@ class StudySentence {
         'english': english,
         'chinese': chinese,
         'grammar': grammar,
+        'grammarByDepth': grammarByDepth,
         'words': words,
         'savedWords': savedWords.toList(),
+        'isFavorite': isFavorite,
         'skipped': skipped,
         'attempts': attempts.map((item) => item.toJson()).toList(),
       };
@@ -74,6 +81,12 @@ class StudySentence {
         chinese: json['chinese'] as String? ?? '',
         grammar: (json['grammar'] as Map?)?.map(
           (key, value) => MapEntry(key as String, value as String),
+        ),
+        grammarByDepth: (json['grammarByDepth'] as Map? ?? {}).map(
+          (key, value) => MapEntry(
+              key as String,
+              (value as Map).map((field, content) =>
+                  MapEntry(field as String, content as String))),
         ),
         words: (json['words'] as Map?)?.map(
           (key, value) => MapEntry(
@@ -86,6 +99,7 @@ class StudySentence {
         savedWords: (json['savedWords'] as List? ?? [])
             .map((item) => item as String)
             .toSet(),
+        isFavorite: json['isFavorite'] as bool? ?? false,
         skipped: json['skipped'] as bool? ?? false,
         attempts: (json['attempts'] as List? ?? [])
             .map((item) => StudyAttempt.fromJson(item as Map<String, dynamic>))

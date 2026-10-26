@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'study_article_import.dart';
@@ -11,7 +11,9 @@ import 'learning_ai.dart';
 import 'practice_history.dart';
 import 'study_document.dart';
 import 'study_storage.dart';
+import 'study_library.dart';
 import 'translation.dart';
+import 'word_lemma.dart';
 
 class WindowsStudyPage extends StatefulWidget {
   const WindowsStudyPage({
@@ -21,6 +23,8 @@ class WindowsStudyPage extends StatefulWidget {
     this.translationService,
     this.aiService,
     this.legacyStore,
+    this.libraryStore,
+    this.lemmaResolver,
   });
 
   final StudyStore? studyStore;
@@ -28,6 +32,8 @@ class WindowsStudyPage extends StatefulWidget {
   final TranslationService? translationService;
   final LearningAiService? aiService;
   final PracticeHistoryStore? legacyStore;
+  final StudyLibraryStore? libraryStore;
+  final WordLemmaResolver? lemmaResolver;
 
   @override
   State<WindowsStudyPage> createState() => _WindowsStudyPageState();
@@ -42,7 +48,12 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
   late final TranslationService _translation =
       widget.translationService ?? TranslationService();
   late final LearningAiService _ai = widget.aiService ?? LearningAiService();
+  late final StudyLibraryStore _libraryStore =
+      widget.libraryStore ?? const StudyLibraryStore();
+  late final WordLemmaResolver _lemmas =
+      widget.lemmaResolver ?? WordLemmaResolver();
   List<StudyDocument> _documents = [];
+  StudyLibrary _library = StudyLibrary();
   StudyDocument? _current;
   TranslationCredentials _credentials = const TranslationCredentials();
   Future<void> _writes = Future.value();
@@ -80,8 +91,10 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
       final results = await Future.wait<Object>([
         _store.load(),
         _credentialStore.load(),
+        _libraryStore.load(),
       ]);
       var documents = results[0] as List<StudyDocument>;
+      final library = results[2] as StudyLibrary;
       if (!existingStudyFile) {
         try {
           final legacy =
@@ -92,13 +105,38 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
           // The old history is left untouched if it cannot be migrated.
         }
       }
+      for (final document in documents) {
+        library.importDocument(document);
+      }
+      for (final document in documents) {
+        for (var index = 0; index < document.sentences.length; index++) {
+          final sentence = document.sentences[index];
+          if (library.sentences
+              .containsKey(sentenceKey(sentence.english, sentence.chinese))) {
+            sentence.isFavorite = true;
+            library.saveSentence(sentence, '${document.id}:$index');
+          }
+        }
+      }
+      final oldWords = library.words.values.toList();
+      library.words.clear();
+      for (final entry in oldWords) {
+        final lemma = await _lemmas.lemma(entry.lemma);
+        final target =
+            library.words.putIfAbsent(lemma, () => SavedWord(lemma: lemma));
+        for (final example in entry.examples) {
+          target.addExample(example);
+        }
+      }
       if (!mounted) return;
       setState(() {
         _documents = documents;
+        _library = library;
         _credentials = results[1] as TranslationCredentials;
         _loading = false;
       });
       if (_documents.isNotEmpty) _select(_documents.first);
+      _save();
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -188,10 +226,11 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
   void _save() {
     final snapshot = [for (final document in _documents) document.toJson()];
     final documents = snapshot.map(StudyDocument.fromJson).toList();
-    _writes = _writes
-        .catchError((Object _) {})
-        .then((_) => _store.save(documents))
-        .catchError((Object _) {
+    final library = StudyLibrary.fromJson(_library.toJson());
+    _writes = _writes.catchError((Object _) {}).then((_) async {
+      await _store.save(documents);
+      await _libraryStore.save(library);
+    }).catchError((Object _) {
       if (mounted) setState(() => _error = '自动保存失败，请导出 XLSX 备份。');
     });
   }
@@ -211,6 +250,47 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
     });
   }
 
+  Future<void> _deleteDocument(StudyDocument document) async {
+    if (_busy) return;
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('删除练习记录？'),
+              content: Text('将删除“${document.title}”的文章、作答和评价。生词与收藏句子会保留。'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('取消')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('删除')),
+              ],
+            ));
+    if (confirmed != true || !mounted) return;
+    final oldIndex = _documents.indexOf(document);
+    if (oldIndex < 0) return;
+    final wasCurrent = _current == document;
+    setState(() {
+      _documents.removeAt(oldIndex);
+      if (wasCurrent) _current = null;
+    });
+    if (wasCurrent && _documents.isNotEmpty) _select(_documents.first);
+    _save();
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('已删除“${document.title}”'),
+      duration: const Duration(seconds: 6),
+      action: SnackBarAction(
+          label: '撤销',
+          onPressed: () {
+            setState(() => _documents.insert(
+                oldIndex.clamp(0, _documents.length), document));
+            if (wasCurrent) _select(document);
+            _save();
+          }),
+    ));
+  }
+
   void _newArticle() {
     final document = StudyDocument(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -223,7 +303,7 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
     _save();
   }
 
-  void _adopt(StudyDocument document) {
+  Future<void> _adopt(StudyDocument document) async {
     final previous = _current;
     setState(() {
       if (previous != null && previous.sentences.isEmpty) {
@@ -232,6 +312,18 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
       _documents.removeWhere((item) => item.id == document.id);
       _documents.insert(0, document);
     });
+    _library.importDocument(document);
+    final oldWords = _library.words.values.toList();
+    _library.words.clear();
+    for (final entry in oldWords) {
+      final lemma = await _lemmas.lemma(entry.lemma);
+      final target =
+          _library.words.putIfAbsent(lemma, () => SavedWord(lemma: lemma));
+      for (final example in entry.examples) {
+        target.addExample(example);
+      }
+    }
+    if (!mounted) return;
     _select(document);
     _save();
   }
@@ -252,11 +344,20 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
       final bytes = await file.readAsBytes();
       final imported = await ArticleImporter.importBytes(file.name, bytes);
       if (!mounted) return;
-      if (imported is StudyDocument) {
-        _adopt(imported);
+      if (imported is StudyImportBundle) {
+        _mergeImportedLibrary(imported.library);
+        for (final sentence in imported.document.sentences) {
+          if (imported.library.sentences
+              .containsKey(sentenceKey(sentence.english, sentence.chinese))) {
+            sentence.isFavorite = true;
+          }
+        }
+        await _adopt(imported.document);
+      } else if (imported is StudyDocument) {
+        await _adopt(imported);
       } else if (imported is SpreadsheetPreview) {
         final document = await _chooseSpreadsheet(imported, file.name);
-        if (document != null && mounted) _adopt(document);
+        if (document != null && mounted) await _adopt(document);
       }
     } on FormatException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -264,6 +365,34 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
       if (mounted) setState(() => _error = '文件读取失败，请确认格式和内容。');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _mergeImportedLibrary(StudyLibrary imported) {
+    for (final entry in imported.words.entries) {
+      final target = _library.words
+          .putIfAbsent(entry.key, () => SavedWord(lemma: entry.key));
+      for (final example in entry.value.examples) {
+        target.addExample(example);
+      }
+    }
+    for (final entry in imported.sentences.entries) {
+      final target = _library.sentences.putIfAbsent(
+          entry.key,
+          () => SavedSentence(
+              english: entry.value.english, chinese: entry.value.chinese));
+      target.sources.addAll(entry.value.sources);
+      target.analyses.addAll(entry.value.analyses);
+    }
+    for (final document in _documents) {
+      for (var index = 0; index < document.sentences.length; index++) {
+        final sentence = document.sentences[index];
+        if (_library.sentences
+            .containsKey(sentenceKey(sentence.english, sentence.chinese))) {
+          sentence.isFavorite = true;
+          _library.saveSentence(sentence, '${document.id}:$index');
+        }
+      }
     }
   }
 
@@ -380,14 +509,22 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
   String _columnName(int index) => '${String.fromCharCode(65 + index)} 列';
 
   Future<void> _openSettings() async {
-    final updated = await showDialog<TranslationCredentials>(
+    final updated = await showDialog<
+        ({TranslationCredentials credentials, GrammarDepth depth})>(
       context: context,
-      builder: (context) => _AiSettingsDialog(initial: _credentials),
+      builder: (context) => _AiSettingsDialog(
+          initial: _credentials, initialDepth: _library.defaultDepth),
     );
     if (updated == null || !mounted) return;
     try {
-      await _credentialStore.save(updated);
-      if (mounted) setState(() => _credentials = updated);
+      await _credentialStore.save(updated.credentials);
+      if (mounted) {
+        setState(() {
+          _credentials = updated.credentials;
+          _library.defaultDepth = updated.depth;
+        });
+      }
+      _save();
     } catch (_) {
       if (mounted) setState(() => _error = 'AI 设置保存失败。');
     }
@@ -409,7 +546,7 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
       if (_inputDirty || current.sentences.isEmpty) {
         final parsed = StudyDocument.fromText(_input.text,
             title: current.title == '新文章' ? null : current.title);
-        _adopt(parsed);
+        await _adopt(parsed);
       }
       setState(() {
         _current!.step = 1;
@@ -432,7 +569,10 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
       _translatedCount = 0;
     });
     try {
-      for (final sentence in document.sentences) {
+      for (var sentenceIndex = 0;
+          sentenceIndex < document.sentences.length;
+          sentenceIndex++) {
+        final sentence = document.sentences[sentenceIndex];
         if (sentence.chinese.trim().isNotEmpty) continue;
         final translated = await _translation.translateChunk(
           sentence.english,
@@ -441,7 +581,12 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
         );
         if (!mounted || _current != document) return;
         setState(() {
+          final oldChinese = sentence.chinese;
           sentence.chinese = translated;
+          if (sentence.isFavorite) {
+            _library.syncSentence(sentence, '${document.id}:$sentenceIndex',
+                sentence.english, oldChinese);
+          }
           _translatedCount++;
         });
         _save();
@@ -453,20 +598,28 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
     }
   }
 
-  Future<void> _analyzeGrammar(StudySentence sentence) async {
-    if (sentence.grammar != null) {
-      _showAnalysis('语法分析', sentence.grammar!);
+  Future<void> _analyzeGrammar(StudySentence sentence,
+      {GrammarDepth? depth, bool force = false}) async {
+    final selected = depth ?? _library.defaultDepth;
+    final cached = sentence.grammarByDepth[selected.name] ??
+        (selected == GrammarDepth.standard ? sentence.grammar : null);
+    if (cached != null && !force) {
+      _showGrammarDialog(sentence, selected, cached);
       return;
     }
     if (_busy || !await _ensureAi()) return;
     setState(() => _busy = true);
     try {
       final result = await _ai.analyzeGrammar(
-          sentence.english, sentence.chinese, _credentials);
+          sentence.english, sentence.chinese, _credentials,
+          depth: selected);
       if (!mounted) return;
-      setState(() => sentence.grammar = result);
+      setState(() {
+        sentence.grammarByDepth[selected.name] = result;
+        _library.syncGrammar(sentence);
+      });
       _save();
-      _showAnalysis('语法分析', result);
+      _showGrammarDialog(sentence, selected, result);
     } on LearningAiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -474,10 +627,97 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
     }
   }
 
-  Future<void> _analyzeWord(StudySentence sentence, String word) async {
+  void _showGrammarDialog(
+      StudySentence sentence, GrammarDepth depth, Map<String, String> result) {
+    final isLegacy = !result.containsKey('skeleton');
+    showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('语法分析'),
+              content: SizedBox(
+                  width: 640,
+                  height: (MediaQuery.sizeOf(context).height - 220)
+                      .clamp(180.0, 460.0),
+                  child: ListView(children: [
+                    Text(sentence.english,
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<GrammarDepth>(
+                      initialValue: depth,
+                      decoration: const InputDecoration(labelText: '讲解深度'),
+                      items: [
+                        for (final item in GrammarDepth.values)
+                          DropdownMenuItem(value: item, child: Text(item.label))
+                      ],
+                      onChanged: (value) {
+                        if (value == null || value == depth) return;
+                        Navigator.pop(context);
+                        _analyzeGrammar(sentence, depth: value);
+                      },
+                    ),
+                    const SizedBox(height: 18),
+                    _grammarSection('句子骨架',
+                        result[isLegacy ? 'structure' : 'skeleton'] ?? ''),
+                    _grammarSection(
+                        '关键语法', result[isLegacy ? 'grammar' : 'points'] ?? '',
+                        bullets: true),
+                    _grammarSection(
+                        '中文理解',
+                        result[isLegacy ? 'explanation' : 'understanding'] ??
+                            ''),
+                    if (isLegacy) const Text('旧版分析 · 可重新分析获取新版讲解'),
+                  ])),
+              actions: [
+                TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _analyzeGrammar(sentence, depth: depth, force: true);
+                    },
+                    child: const Text('重新分析')),
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('关闭')),
+              ],
+            ));
+  }
+
+  Widget _grammarSection(String title, String content, {bool bullets = false}) {
+    final parts = content
+        .trim()
+        .split(RegExp(bullets ? r'\n+|(?<=[。；])' : r'\n+'))
+        .map((item) => item.trim().replaceFirst(RegExp(r'^[-•\d.、\s]+'), ''))
+        .where((item) => item.isNotEmpty)
+        .toList();
+    return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 7),
+          for (final part in parts)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 5),
+              child: Text(bullets ? '• $part' : part,
+                  style: const TextStyle(fontSize: 15, height: 1.5)),
+            ),
+        ]));
+  }
+
+  Future<void> _analyzeWord(StudySentence sentence, String word,
+      {bool currentContext = false}) async {
     final key = word.toLowerCase();
+    final lemma = _library.words.isEmpty ? key : await _lemmas.lemma(word);
+    if (!mounted) return;
+    if (!currentContext && _library.words.containsKey(lemma)) {
+      _showSavedWord(sentence, word, lemma);
+      return;
+    }
     if (sentence.words.containsKey(key)) {
-      _showWordAnalysis(sentence, word, key);
+      if (_library.words.containsKey(lemma)) {
+        _rememberWordExample(lemma, sentence, key);
+      }
+      _showWordAnalysis(sentence, word, key, lemma);
       return;
     }
     if (_busy || !await _ensureAi()) return;
@@ -487,8 +727,11 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
           await _ai.analyzeWord(word, sentence.english, _credentials);
       if (!mounted) return;
       setState(() => sentence.words[key] = result);
+      if (_library.words.containsKey(lemma)) {
+        _rememberWordExample(lemma, sentence, key);
+      }
       _save();
-      _showWordAnalysis(sentence, word, key);
+      _showWordAnalysis(sentence, word, key, lemma);
     } on LearningAiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -496,11 +739,90 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
     }
   }
 
-  void _showWordAnalysis(StudySentence sentence, String word, String key) {
+  void _rememberWordExample(String lemma, StudySentence sentence, String key) {
+    _library.words[lemma]?.addExample(SavedWordExample(
+      word: key,
+      sentence: sentence.english,
+      source: _current?.title ?? '',
+      analysis: sentence.words[key]!,
+    ));
+    _save();
+  }
+
+  void _showSavedWord(StudySentence? sentence, String word, String lemma) {
+    final entry = _library.words[lemma]!;
+    showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: Text('$word · ${entry.lemma}'),
+              content: SizedBox(
+                  width: 560,
+                  height: 360,
+                  child: ListView(children: [
+                    for (final example in entry.examples)
+                      Card(
+                          child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                        example.analysis['meaning'] ??
+                                            example.word,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 6),
+                                    Text(example.sentence),
+                                    if (example.source.isNotEmpty)
+                                      Text(example.source,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall),
+                                  ]))),
+                  ])),
+              actions: [
+                if (sentence != null)
+                  TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _analyzeWord(sentence, word, currentContext: true);
+                      },
+                      child: const Text('分析当前用法')),
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('关闭')),
+              ],
+            ));
+  }
+
+  Future<void> _removeWord(String lemma) async {
+    final wordsToRemove = <StudySentence, Set<String>>{};
+    for (final document in _documents) {
+      for (final sentence in document.sentences) {
+        for (final word in sentence.savedWords) {
+          if (await _lemmas.lemma(word) == lemma) {
+            wordsToRemove.putIfAbsent(sentence, () => {}).add(word);
+          }
+        }
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _library.words.remove(lemma);
+      for (final entry in wordsToRemove.entries) {
+        entry.key.savedWords.removeAll(entry.value);
+      }
+    });
+    _save();
+  }
+
+  void _showWordAnalysis(
+      StudySentence sentence, String word, String key, String lemma) {
+    var activeLemma = lemma;
     showDialog<void>(
       context: context,
       builder: (context) => StatefulBuilder(builder: (context, refresh) {
-        final saved = sentence.savedWords.contains(key);
+        final saved = _library.words.containsKey(activeLemma);
         return AlertDialog(
           title: Text(word),
           content: SizedBox(
@@ -517,16 +839,28 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                setState(() {
-                  if (saved) {
-                    sentence.savedWords.remove(key);
-                  } else {
+              onPressed: () async {
+                if (saved) {
+                  await _removeWord(activeLemma);
+                } else {
+                  activeLemma = await _lemmas.lemma(word);
+                  if (!mounted) return;
+                  setState(() {
                     sentence.savedWords.add(key);
-                  }
-                });
+                    _library.words
+                        .putIfAbsent(
+                            activeLemma, () => SavedWord(lemma: activeLemma))
+                        .addExample(
+                          SavedWordExample(
+                              word: key,
+                              sentence: sentence.english,
+                              source: _current?.title ?? '',
+                              analysis: sentence.words[key]!),
+                        );
+                  });
+                  _save();
+                }
                 refresh(() {});
-                _save();
               },
               child: Text(saved ? '移出生词库' : '加入生词库'),
             ),
@@ -543,19 +877,8 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
     showDialog<void>(
       context: context,
       builder: (context) => StatefulBuilder(builder: (context, refresh) {
-        final entries =
-            <({StudyDocument document, StudySentence sentence, String word})>[];
-        for (final document in _documents) {
-          for (final sentence in document.sentences) {
-            for (final word in sentence.savedWords) {
-              if (sentence.words.containsKey(word)) {
-                entries
-                    .add((document: document, sentence: sentence, word: word));
-              }
-            }
-          }
-        }
-        entries.sort((a, b) => a.word.compareTo(b.word));
+        final entries = _library.words.values.toList()
+          ..sort((a, b) => a.lemma.compareTo(b.lemma));
         return AlertDialog(
           title: Text('生词库（${entries.length}）'),
           content: SizedBox(
@@ -567,28 +890,25 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
                     itemCount: entries.length,
                     itemBuilder: (context, index) {
                       final entry = entries[index];
-                      final analysis = entry.sentence.words[entry.word]!;
+                      final example = entry.examples.firstOrNull;
                       return ListTile(
-                        title: Text(entry.word),
+                        title: Text(entry.lemma),
                         subtitle: Text(
-                          '${analysis['meaning'] ?? ''}\n${entry.document.title}',
+                          '${example?.analysis['meaning'] ?? ''}\n${entry.examples.length} 个例句',
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                         ),
                         isThreeLine: true,
                         onTap: () {
                           Navigator.pop(context);
-                          _showWordAnalysis(
-                              entry.sentence, entry.word, entry.word);
+                          _showSavedWord(null, entry.lemma, entry.lemma);
                         },
                         trailing: IconButton(
                           tooltip: '移出生词库',
                           icon: const Icon(Icons.delete_outline),
-                          onPressed: () {
-                            setState(() =>
-                                entry.sentence.savedWords.remove(entry.word));
+                          onPressed: () async {
+                            await _removeWord(entry.lemma);
                             refresh(() {});
-                            _save();
                           },
                         ),
                       );
@@ -605,32 +925,137 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
     );
   }
 
-  void _showAnalysis(String title, Map<String, String> result) {
+  void _toggleFavorite(StudyDocument document, int index) {
+    final sentence = document.sentences[index];
+    final key = sentenceKey(sentence.english, sentence.chinese);
+    setState(() {
+      if (_library.sentences.containsKey(key)) {
+        _library.sentences.remove(key);
+        for (final doc in _documents) {
+          for (final item in doc.sentences) {
+            if (sentenceKey(item.english, item.chinese) == key) {
+              item.isFavorite = false;
+            }
+          }
+        }
+      } else {
+        for (final doc in _documents) {
+          for (var itemIndex = 0;
+              itemIndex < doc.sentences.length;
+              itemIndex++) {
+            final item = doc.sentences[itemIndex];
+            if (sentenceKey(item.english, item.chinese) == key) {
+              item.isFavorite = true;
+              _library.saveSentence(item, '${doc.id}:$itemIndex');
+            }
+          }
+        }
+      }
+    });
+    _save();
+  }
+
+  void _openFavorites() {
     showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: SizedBox(
-          width: 520,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              for (final entry in result.entries) ...[
-                Text(_analysisLabel(entry.key),
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text(entry.value),
-                const SizedBox(height: 14),
+        context: context,
+        builder: (context) => StatefulBuilder(builder: (context, refresh) {
+              final entries = _library.sentences.values.toList();
+              return AlertDialog(
+                title: Text('句子收藏（${entries.length}）'),
+                content: SizedBox(
+                    width: 700,
+                    height: (MediaQuery.sizeOf(context).height - 220)
+                        .clamp(180.0, 500.0),
+                    child: entries.isEmpty
+                        ? const Center(child: Text('还没有收藏句子。'))
+                        : ListView.builder(
+                            itemCount: entries.length,
+                            itemBuilder: (context, index) {
+                              final entry = entries[index];
+                              return ListTile(
+                                title: Text(entry.english),
+                                subtitle: Text(
+                                    '${entry.chinese}\n${entry.analyses.isEmpty ? '待分析' : '已保存语法分析'}',
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis),
+                                isThreeLine: true,
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _openFavorite(entry);
+                                },
+                                trailing: IconButton(
+                                  tooltip: '取消收藏',
+                                  icon: const Icon(
+                                      Icons.bookmark_remove_outlined),
+                                  onPressed: () {
+                                    final key = sentenceKey(
+                                        entry.english, entry.chinese);
+                                    setState(() {
+                                      _library.sentences.remove(key);
+                                      for (final doc in _documents) {
+                                        for (final item in doc.sentences) {
+                                          if (sentenceKey(
+                                                  item.english, item.chinese) ==
+                                              key) {
+                                            item.isFavorite = false;
+                                          }
+                                        }
+                                      }
+                                    });
+                                    refresh(() {});
+                                    _save();
+                                  },
+                                ),
+                              );
+                            })),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('关闭'))
+                ],
+              );
+            }));
+  }
+
+  void _openFavorite(SavedSentence entry) {
+    showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('收藏句子'),
+              content: SizedBox(
+                  width: 600,
+                  child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(entry.english,
+                            style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 12),
+                        Text(entry.chinese),
+                        const SizedBox(height: 12),
+                        Text(entry.analyses.isEmpty
+                            ? '语法分析：待分析'
+                            : '已保存 ${entry.analyses.length} 个分析版本'),
+                      ])),
+              actions: [
+                TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      final sentence = StudySentence(
+                          paragraph: 1,
+                          english: entry.english,
+                          chinese: entry.chinese,
+                          grammarByDepth: Map.of(entry.analyses)
+                            ..remove('legacy'),
+                          grammar: entry.analyses['legacy']);
+                      _analyzeGrammar(sentence);
+                    },
+                    child: const Text('查看 / 生成语法分析')),
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('关闭')),
               ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context), child: const Text('关闭'))
-        ],
-      ),
-    );
+            ));
   }
 
   String _analysisLabel(String key) => switch (key) {
@@ -683,15 +1108,26 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
       setState(() => _error = '英文原句不能为空。');
       return;
     }
+    final oldEnglish = sentence.english;
+    final oldChinese = sentence.chinese;
+    final index = _current!.sentences.indexOf(sentence);
     setState(() {
       if (sentence.english != english.trim()) {
         sentence.grammar = null;
+        sentence.grammarByDepth.clear();
         sentence.words.clear();
         sentence.savedWords.clear();
       }
       sentence.english = english.trim();
-      if (sentence.chinese != chinese.trim()) sentence.grammar = null;
+      if (sentence.chinese != chinese.trim()) {
+        sentence.grammar = null;
+        sentence.grammarByDepth.clear();
+      }
       sentence.chinese = chinese.trim();
+      if (sentence.isFavorite && index >= 0) {
+        _library.syncSentence(
+            sentence, '${_current!.id}:$index', oldEnglish, oldChinese);
+      }
       _current!.needsAlignmentReview =
           _current!.sentences.any((item) => item.chinese.trim().isEmpty);
       _error = null;
@@ -786,7 +1222,8 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
     final document = _current;
     if (document == null || document.sentences.isEmpty) return;
     try {
-      final bytes = exportStudy(document);
+      final included = await _library.forDocument(document, _lemmas.lemma);
+      final bytes = exportStudy(document, library: included);
       await FilePicker.saveFile(
         fileName:
             'ReMirror-${document.title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}.xlsx',
@@ -809,13 +1246,21 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
             maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           if (_documents.isNotEmpty)
-            PopupMenuButton<StudyDocument>(
+            PopupMenuButton<({StudyDocument document, bool delete})>(
               tooltip: '最近文章',
               icon: const Icon(Icons.history),
-              onSelected: _select,
+              onSelected: (value) => value.delete
+                  ? _deleteDocument(value.document)
+                  : _select(value.document),
               itemBuilder: (context) => [
-                for (final item in _documents)
-                  PopupMenuItem(value: item, child: Text(item.title)),
+                for (final item in _documents) ...[
+                  PopupMenuItem(
+                      value: (document: item, delete: false),
+                      child: Text(item.title)),
+                  PopupMenuItem(
+                      value: (document: item, delete: true),
+                      child: Text('删除：${item.title}')),
+                ],
               ],
             ),
           TextButton.icon(
@@ -830,6 +1275,16 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
               onPressed: _openVocabulary,
               icon: const Icon(Icons.bookmarks_outlined),
               label: const Text('生词库')),
+          if (MediaQuery.sizeOf(context).width >= 1100)
+            TextButton.icon(
+                onPressed: _openFavorites,
+                icon: const Icon(Icons.bookmark_outline),
+                label: const Text('句子收藏'))
+          else
+            IconButton(
+                onPressed: _openFavorites,
+                tooltip: '句子收藏',
+                icon: const Icon(Icons.bookmark_outline)),
           TextButton.icon(
               onPressed:
                   document?.sentences.isNotEmpty == true ? _export : null,
@@ -894,6 +1349,11 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
                     maxLines: 2, overflow: TextOverflow.ellipsis),
                 subtitle: Text('${document.sentences.length} 句'),
                 onTap: () => _select(document),
+                trailing: IconButton(
+                  tooltip: '删除 ${document.title}',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _busy ? null : () => _deleteDocument(document),
+                ),
               ),
           ])),
         ]),
@@ -983,6 +1443,8 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
                         children: [
                           InteractiveEnglish(
                             text: sentence.english,
+                            resolver: _lemmas,
+                            savedLemmas: _library.words.keys.toSet(),
                             onSentence: () => _analyzeGrammar(sentence),
                             onWord: (word) => _analyzeWord(sentence, word),
                           ),
@@ -1006,6 +1468,19 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
                                     : () => _editSentence(sentence),
                                 icon: const Icon(Icons.edit),
                                 label: const Text('校对英中内容')),
+                            TextButton.icon(
+                                onPressed: () =>
+                                    _toggleFavorite(document, index),
+                                icon: Icon(_library.sentences.containsKey(
+                                        sentenceKey(
+                                            sentence.english, sentence.chinese))
+                                    ? Icons.bookmark
+                                    : Icons.bookmark_outline),
+                                label: Text(_library.sentences.containsKey(
+                                        sentenceKey(
+                                            sentence.english, sentence.chinese))
+                                    ? '取消收藏'
+                                    : '收藏句子')),
                           ]),
                         ]),
                   )),
@@ -1077,7 +1552,24 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
         if (last != null) ...[
           const SizedBox(height: 22),
           const Text('英文原句', style: TextStyle(fontWeight: FontWeight.bold)),
-          Text(last.englishOriginal ?? sentence.english),
+          InteractiveEnglish(
+            text: last.englishOriginal ?? sentence.english,
+            resolver: _lemmas,
+            savedLemmas: _library.words.keys.toSet(),
+            onSentence: () => _analyzeGrammar(sentence),
+            onWord: (word) => _analyzeWord(sentence, word),
+          ),
+          TextButton.icon(
+            onPressed: () => _toggleFavorite(document, index),
+            icon: Icon(_library.sentences.containsKey(
+                    sentenceKey(sentence.english, sentence.chinese))
+                ? Icons.bookmark
+                : Icons.bookmark_outline),
+            label: Text(_library.sentences.containsKey(
+                    sentenceKey(sentence.english, sentence.chinese))
+                ? '取消收藏'
+                : '收藏句子'),
+          ),
           const SizedBox(height: 12),
           if (last.answer != _answer.text.trim())
             const Text('当前输入已修改；再次提交后生成新评价。'),
@@ -1177,9 +1669,13 @@ class InteractiveEnglish extends StatefulWidget {
   const InteractiveEnglish(
       {super.key,
       required this.text,
+      required this.resolver,
+      required this.savedLemmas,
       required this.onSentence,
       required this.onWord});
   final String text;
+  final WordLemmaResolver resolver;
+  final Set<String> savedLemmas;
   final VoidCallback onSentence;
   final ValueChanged<String> onWord;
 
@@ -1189,6 +1685,25 @@ class InteractiveEnglish extends StatefulWidget {
 
 class _InteractiveEnglishState extends State<InteractiveEnglish> {
   final _recognizers = <TapGestureRecognizer>[];
+  late Future<Set<String>> _highlighted;
+
+  @override
+  void initState() {
+    super.initState();
+    _highlighted =
+        widget.resolver.highlightedForms(widget.text, widget.savedLemmas);
+  }
+
+  @override
+  void didUpdateWidget(covariant InteractiveEnglish oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.text != oldWidget.text ||
+        widget.resolver != oldWidget.resolver ||
+        !setEquals(widget.savedLemmas, oldWidget.savedLemmas)) {
+      _highlighted =
+          widget.resolver.highlightedForms(widget.text, widget.savedLemmas);
+    }
+  }
 
   @override
   void dispose() {
@@ -1199,15 +1714,19 @@ class _InteractiveEnglishState extends State<InteractiveEnglish> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => FutureBuilder<Set<String>>(
+        future: _highlighted,
+        builder: (context, snapshot) => _buildText(snapshot.data ?? const {}),
+      );
+
+  Widget _buildText(Set<String> highlighted) {
     for (final recognizer in _recognizers) {
       recognizer.dispose();
     }
     _recognizers.clear();
     final spans = <InlineSpan>[];
     var position = 0;
-    for (final match
-        in RegExp(r"[A-Za-z]+(?:['’-][A-Za-z]+)*").allMatches(widget.text)) {
+    for (final match in englishWordPattern.allMatches(widget.text)) {
       if (match.start > position) {
         spans.add(TextSpan(text: widget.text.substring(position, match.start)));
       }
@@ -1218,9 +1737,15 @@ class _InteractiveEnglishState extends State<InteractiveEnglish> {
       spans.add(TextSpan(
           text: word,
           recognizer: recognizer,
-          style: const TextStyle(
+          style: TextStyle(
               decoration: TextDecoration.underline,
-              decorationStyle: TextDecorationStyle.dotted)));
+              decorationStyle: TextDecorationStyle.dotted,
+              backgroundColor: highlighted.contains(word.toLowerCase())
+                  ? Theme.of(context).colorScheme.tertiaryContainer
+                  : null,
+              fontWeight: highlighted.contains(word.toLowerCase())
+                  ? FontWeight.bold
+                  : null)));
       position = match.end;
     }
     if (position < widget.text.length) {
@@ -1238,8 +1763,9 @@ class _InteractiveEnglishState extends State<InteractiveEnglish> {
 }
 
 class _AiSettingsDialog extends StatefulWidget {
-  const _AiSettingsDialog({required this.initial});
+  const _AiSettingsDialog({required this.initial, required this.initialDepth});
   final TranslationCredentials initial;
+  final GrammarDepth initialDepth;
 
   @override
   State<_AiSettingsDialog> createState() => _AiSettingsDialogState();
@@ -1249,6 +1775,7 @@ class _AiSettingsDialogState extends State<_AiSettingsDialog> {
   late final _endpoint = TextEditingController(text: widget.initial.aiEndpoint);
   late final _key = TextEditingController(text: widget.initial.aiApiKey);
   late final _model = TextEditingController(text: widget.initial.aiModel);
+  late GrammarDepth _depth = widget.initialDepth;
   String? _error;
 
   @override
@@ -1265,16 +1792,17 @@ class _AiSettingsDialogState extends State<_AiSettingsDialog> {
       setState(() => _error = '接口地址必须是有效的 HTTPS 地址。');
       return;
     }
-    Navigator.pop(
-        context,
-        TranslationCredentials(
-          googleApiKey: widget.initial.googleApiKey,
-          baiduAppId: widget.initial.baiduAppId,
-          baiduSecret: widget.initial.baiduSecret,
-          aiEndpoint: _endpoint.text.trim(),
-          aiApiKey: _key.text.trim(),
-          aiModel: _model.text.trim(),
-        ));
+    Navigator.pop(context, (
+      credentials: TranslationCredentials(
+        googleApiKey: widget.initial.googleApiKey,
+        baiduAppId: widget.initial.baiduAppId,
+        baiduSecret: widget.initial.baiduSecret,
+        aiEndpoint: _endpoint.text.trim(),
+        aiApiKey: _key.text.trim(),
+        aiModel: _model.text.trim(),
+      ),
+      depth: _depth
+    ));
   }
 
   @override
@@ -1296,6 +1824,17 @@ class _AiSettingsDialogState extends State<_AiSettingsDialog> {
                 TextField(
                     controller: _model,
                     decoration: const InputDecoration(labelText: '模型名称')),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<GrammarDepth>(
+                  initialValue: _depth,
+                  decoration: const InputDecoration(labelText: '默认语法分析深度'),
+                  items: [
+                    for (final item in GrammarDepth.values)
+                      DropdownMenuItem(value: item, child: Text(item.label))
+                  ],
+                  onChanged: (value) =>
+                      setState(() => _depth = value ?? _depth),
+                ),
                 if (_error != null)
                   Text(_error!,
                       style: TextStyle(

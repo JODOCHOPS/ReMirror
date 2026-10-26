@@ -72,6 +72,12 @@ void main() {
       'grammar': '一般现在时',
       'explanation': '陈述事实'
     };
+    sentence.grammarByDepth['beginner'] = {
+      'skeleton': 'Hello 是问候。',
+      'points': '短句。',
+      'understanding': '你好。',
+    };
+    sentence.isFavorite = true;
     sentence.words['hello'] = {
       'meaning': '你好',
       'partOfSpeech': '感叹词',
@@ -110,6 +116,9 @@ void main() {
     final restored =
         await ArticleImporter.importBytes('study.xlsx', bytes) as StudyDocument;
     expect(restored.sentences.single.grammar?['structure'], '主谓结构');
+    expect(restored.sentences.single.grammarByDepth['beginner']?['skeleton'],
+        'Hello 是问候。');
+    expect(restored.sentences.single.isFavorite, isTrue);
     expect(restored.sentences.single.words['hello']?['meaning'], '你好');
     expect(restored.sentences.single.savedWords, contains('hello'));
     expect(restored.sentences.single.attempts.length, 2);
