@@ -3,10 +3,12 @@ name: Build Windows and Android
 on:
   push:
     branches: [main, 'codex/**']
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
   android:
+    if: startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,8 +28,20 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Check release version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $tagVersion = '${{ github.ref_name }}' -replace '^v', ''
+          $pubspecVersion = (Select-String -Path pubspec.yaml -Pattern '^version: (\d+\.\d+\.\d+)\+\d+$').Matches.Groups[1].Value
+          $installerVersion = (Select-String -Path installer.iss -Pattern '^#define MyAppVersion "(\d+\.\d+\.\d+)"$').Matches.Groups[1].Value
+          if (-not $tagVersion -or $tagVersion -ne $pubspecVersion -or $tagVersion -ne $installerVersion) {
+            throw "Release tag, pubspec.yaml and installer.iss versions must match: $tagVersion / $pubspecVersion / $installerVersion"
+          }
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.7'
@@ -56,3 +70,15 @@ jobs:
         with:
           name: ReMirror-Windows-Installer
           path: dist/ReMirror-Setup.exe
+      - name: Publish Windows release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          @'
+          Windows x64 安装版。下载 ReMirror-Setup.exe 并运行安装程序。
+
+          首次使用时，在应用中配置自己的 HTTPS Chat Completions 兼容 AI 接口。AI 调用可能产生服务费用。
+          '@ | Set-Content -Path release-notes.md -Encoding utf8
+          gh release create '${{ github.ref_name }}' dist/ReMirror-Setup.exe --verify-tag --title 'ReMirror ${{ github.ref_name }} (Windows)' --notes-file release-notes.md

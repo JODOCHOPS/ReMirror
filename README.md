@@ -55,7 +55,7 @@ Android 运行时请将最后一行改为 `flutter run -d <设备 ID>`。`flutte
 
 ## 打包
 
-`.github/workflows/build.yml` 在 GitHub Actions 上生成 Windows 安装程序和 Android APK，并将两者作为工作流构件上传。也可本地运行：
+`.github/workflows/build.yml` 在 GitHub Actions 上生成 Windows 安装程序和 Android APK，并将两者作为工作流构件上传。推送与 `pubspec.yaml`、`installer.iss` 版本一致的 `v*` 标签后，Windows 构建及检查通过时，会将 `ReMirror-Setup.exe` 发布到 [Releases](https://github.com/JODOCHOPS/ReMirror/releases)。Android APK 仍只作为工作流构件提供。也可本地运行：
 
 ```powershell
 flutter build windows --release
