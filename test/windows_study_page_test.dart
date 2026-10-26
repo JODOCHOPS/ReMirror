@@ -116,6 +116,56 @@ class _Ai extends LearningAiService {
 }
 
 void main() {
+  testWidgets('phone users can read and submit a bilingual study',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = _MemoryStore();
+    try {
+      await tester.pumpWidget(MaterialApp(
+        home: WindowsStudyPage(
+          studyStore: store,
+          credentialStore: const _Credentials(),
+          translationService: _Translation(),
+          aiService: _Ai(),
+          libraryStore: _MemoryLibraryStore(),
+          lemmaResolver: _Lemmas(),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('开始新文章'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byType(TextField).first, 'Hello world.\n你好，世界。');
+      await tester.tap(find.text('下一步：阅读与翻译'));
+      await tester.pumpAndSettle();
+      expect(find.text('你好，世界。'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('下一步：回译训练'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, 'Hi, world!');
+      await tester.tap(find.text('提交并评价'));
+      await tester.pumpAndSettle();
+      expect(store.documents.single.sentences.single.attempts.single.review,
+          isNotNull);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byTooltip('更多功能'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('AI 设置').last);
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('existing Windows session and draft are migrated',
       (tester) async {
     final store = _MemoryStore()..isExisting = false;
@@ -161,8 +211,10 @@ void main() {
 
   testWidgets('Windows study flow reads bilingual text and reviews each answer',
       (tester) async {
-    await tester.binding.setSurfaceSize(const Size(1200, 900));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final store = _MemoryStore();
     final ai = _Ai();
     await tester.pumpWidget(MaterialApp(
@@ -175,6 +227,9 @@ void main() {
       lemmaResolver: _Lemmas(),
     )));
     await tester.pumpAndSettle();
+    expect(
+        MediaQuery.sizeOf(tester.element(find.byType(WindowsStudyPage))).width,
+        1200);
 
     await tester.tap(find.text('开始新文章'));
     await tester.pumpAndSettle();

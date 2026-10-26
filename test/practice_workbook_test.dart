@@ -6,8 +6,21 @@ import 'package:excel_community/excel_community.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remirror/back_translation.dart';
 import 'package:remirror/practice_workbook.dart';
+import 'package:remirror/study_article_import.dart';
+import 'package:remirror/study_document.dart';
 
 void main() {
+  test('the new study flow retains answers from an old Android workbook',
+      () async {
+    final document = await ArticleImporter.importBytes(
+        'old-android.xlsx', _exampleWorkbook()) as StudyDocument;
+    expect(document.sentences.first.english, 'Robots explore Mars.');
+    expect(document.sentences.first.chinese, '机器人探索火星。');
+    expect(
+        document.sentences.first.attempts.single.answer, 'Robots go to Mars.');
+    expect(document.sentences[2].paragraph, 2);
+  });
+
   test('imports the example layout and appends a second round', () {
     final imported = PracticeWorkbook.import(_exampleWorkbook());
     expect(imported.nextRoundSheetName, '第二轮');

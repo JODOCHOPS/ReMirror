@@ -416,6 +416,7 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
           if (english >= count) english = 0;
           if (chinese >= count) chinese = -1;
           return AlertDialog(
+            scrollable: true,
             title: const Text('选择表格中的英中列'),
             content: SizedBox(
               width: 570,
@@ -1076,6 +1077,7 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: const Text('校对英中对应内容'),
         content: SizedBox(
           width: 600,
@@ -1240,6 +1242,7 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
   @override
   Widget build(BuildContext context) {
     final document = _current;
+    final compact = MediaQuery.sizeOf(context).width < 1000;
     return Scaffold(
       appBar: AppBar(
         title: Text(document?.title ?? 'ReMirror',
@@ -1263,37 +1266,66 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
                 ],
               ],
             ),
-          TextButton.icon(
-              onPressed: _busy ? null : _newArticle,
-              icon: const Icon(Icons.add),
-              label: const Text('新文章')),
-          TextButton.icon(
-              onPressed: _busy ? null : _import,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('导入文件')),
-          TextButton.icon(
-              onPressed: _openVocabulary,
-              icon: const Icon(Icons.bookmarks_outlined),
-              label: const Text('生词库')),
-          if (MediaQuery.sizeOf(context).width >= 1100)
-            TextButton.icon(
-                onPressed: _openFavorites,
-                icon: const Icon(Icons.bookmark_outline),
-                label: const Text('句子收藏'))
-          else
+          if (compact) ...[
             IconButton(
-                onPressed: _openFavorites,
-                tooltip: '句子收藏',
-                icon: const Icon(Icons.bookmark_outline)),
-          TextButton.icon(
-              onPressed:
-                  document?.sentences.isNotEmpty == true ? _export : null,
-              icon: const Icon(Icons.save_alt),
-              label: const Text('导出 XLSX')),
-          IconButton(
-              onPressed: _openSettings,
-              tooltip: 'AI 设置',
-              icon: const Icon(Icons.settings)),
+                onPressed: _busy ? null : _newArticle,
+                tooltip: '新文章',
+                icon: const Icon(Icons.add)),
+            IconButton(
+                onPressed: _busy ? null : _import,
+                tooltip: '导入文件',
+                icon: const Icon(Icons.upload_file)),
+            PopupMenuButton<String>(
+              tooltip: '更多功能',
+              onSelected: (value) {
+                if (value == 'words') _openVocabulary();
+                if (value == 'favorites') _openFavorites();
+                if (value == 'export') _export();
+                if (value == 'settings') _openSettings();
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'words', child: Text('生词库')),
+                const PopupMenuItem(value: 'favorites', child: Text('句子收藏')),
+                PopupMenuItem(
+                    value: 'export',
+                    enabled: document?.sentences.isNotEmpty == true,
+                    child: const Text('导出 XLSX')),
+                const PopupMenuItem(value: 'settings', child: Text('AI 设置')),
+              ],
+            ),
+          ] else ...[
+            TextButton.icon(
+                onPressed: _busy ? null : _newArticle,
+                icon: const Icon(Icons.add),
+                label: const Text('新文章')),
+            TextButton.icon(
+                onPressed: _busy ? null : _import,
+                icon: const Icon(Icons.upload_file),
+                label: const Text('导入文件')),
+            TextButton.icon(
+                onPressed: _openVocabulary,
+                icon: const Icon(Icons.bookmarks_outlined),
+                label: const Text('生词库')),
+            if (MediaQuery.sizeOf(context).width >= 1100)
+              TextButton.icon(
+                  onPressed: _openFavorites,
+                  icon: const Icon(Icons.bookmark_outline),
+                  label: const Text('句子收藏'))
+            else
+              IconButton(
+                  onPressed: _openFavorites,
+                  tooltip: '句子收藏',
+                  icon: const Icon(Icons.bookmark_outline)),
+            TextButton.icon(
+                onPressed:
+                    document?.sentences.isNotEmpty == true ? _export : null,
+                icon: const Icon(Icons.save_alt),
+                label: const Text('导出 XLSX')),
+            IconButton(
+                onPressed: _openSettings,
+                tooltip: 'AI 设置',
+                icon: const Icon(Icons.settings)),
+          ],
         ],
       ),
       body: _loading
@@ -1369,21 +1401,23 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
         ],
       ));
 
-  Widget _stepHeader(StudyDocument document) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(children: [
-          for (var index = 0; index < 3; index++) ...[
-            if (index > 0) const Icon(Icons.chevron_right),
-            TextButton(
-              onPressed: index <= document.step && !_busy
-                  ? () => setState(() => document.step = index)
-                  : null,
-              child: Text(['1 输入文章', '2 阅读与分析', '3 回译训练'][index]),
-            ),
-          ],
-          const Spacer(),
-          if (_busy && document.step == 1) Text('已翻译 $_translatedCount 句'),
-        ]),
+  Widget _stepHeader(StudyDocument document) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            for (var index = 0; index < 3; index++) ...[
+              if (index > 0) const Icon(Icons.chevron_right),
+              TextButton(
+                onPressed: index <= document.step && !_busy
+                    ? () => setState(() => document.step = index)
+                    : null,
+                child: Text(['1 输入文章', '2 阅读与分析', '3 回译训练'][index]),
+              ),
+            ],
+            if (_busy && document.step == 1) Text('已翻译 $_translatedCount 句'),
+          ]),
+        ),
       );
 
   Widget _inputStep(StudyDocument document) => Padding(
@@ -1489,27 +1523,30 @@ class _WindowsStudyPageState extends State<WindowsStudyPage> {
         )),
         Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(children: [
-            TextButton(
-                onPressed:
-                    _busy ? null : () => setState(() => document.step = 0),
-                child: const Text('返回输入')),
-            const Spacer(),
-            if (!document.hasAllReferences)
-              OutlinedButton(
-                  onPressed: _busy ? null : _translateMissing,
-                  child: const Text('AI 补译缺失句子')),
-            const SizedBox(width: 12),
-            FilledButton(
-              onPressed: !_busy && document.hasAllReferences
-                  ? () {
-                      setState(() => document.step = 2);
-                      _save();
-                    }
-                  : null,
-              child: const Text('下一步：回译训练'),
-            ),
-          ]),
+          child: Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                TextButton(
+                    onPressed:
+                        _busy ? null : () => setState(() => document.step = 0),
+                    child: const Text('返回输入')),
+                if (!document.hasAllReferences)
+                  OutlinedButton(
+                      onPressed: _busy ? null : _translateMissing,
+                      child: const Text('AI 补译缺失句子')),
+                FilledButton(
+                  onPressed: !_busy && document.hasAllReferences
+                      ? () {
+                          setState(() => document.step = 2);
+                          _save();
+                        }
+                      : null,
+                  child: const Text('下一步：回译训练'),
+                ),
+              ]),
         ),
       ]);
 
@@ -1807,6 +1844,7 @@ class _AiSettingsDialogState extends State<_AiSettingsDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
+        scrollable: true,
         title: const Text('AI 设置'),
         content: SizedBox(
             width: 480,

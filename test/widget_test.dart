@@ -1,25 +1,23 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:remirror/main.dart';
 import 'package:remirror/dictionary_reader.dart';
+import 'package:remirror/main.dart';
+import 'package:remirror/windows_study_page.dart';
 
 void main() {
-  testWidgets('the first translation screen works in a narrow viewport', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(430, 900));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const ReMirrorApp());
-    await tester.pumpAndSettle();
-
-    expect(find.text('从理解原文开始。'), findsOneWidget);
-    expect(find.text('生成中文参考译文'), findsOneWidget);
-    expect(find.text('Google 翻译'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('翻译源设置'));
-    await tester.pumpAndSettle();
-    expect(find.text('翻译源设置'), findsOneWidget);
-    expect(find.text('Google Cloud Translation'), findsOneWidget);
+  testWidgets('Android opens the article study workflow', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    try {
+      await tester.pumpWidget(const ReMirrorApp());
+      expect(find.byType(WindowsStudyPage), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('a tapped English word opens the dictionary dialog',
@@ -31,21 +29,5 @@ void main() {
         const Offset(25, 12));
     await tester.pump();
     expect(find.text('Learning'), findsOneWidget);
-  });
-
-  testWidgets('source editor can switch to a dictionary reading preview', (
-    tester,
-  ) async {
-    await tester.binding.setSurfaceSize(const Size(430, 900));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const ReMirrorApp());
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('填入示例'));
-    await tester.tap(find.text('填入示例'));
-    await tester.pump();
-    await tester.ensureVisible(find.text('阅读查词'));
-    await tester.tap(find.text('阅读查词'));
-    await tester.pump();
-    expect(find.byType(DictionaryReader), findsOneWidget);
   });
 }
