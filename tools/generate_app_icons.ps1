@@ -16,7 +16,7 @@ function New-IconPngBytes {
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     $stream = [System.IO.MemoryStream]::new()
     try {
-        $graphics.Clear([System.Drawing.Color]::White)
+        $graphics.Clear([System.Drawing.Color]::Transparent)
         $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
         $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
         $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
